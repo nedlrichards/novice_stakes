@@ -58,6 +58,7 @@ class CLinear:
         q[li] = sin_final[li] / a[li] ** 2 + sin_init[li] / a[li] ** 2
 
         q /= -self.c_src * self.cm
+        travel_time /= np.abs(self.cm)
 
         self.px = px
         self.rho = rho

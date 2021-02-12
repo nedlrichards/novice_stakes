@@ -3,6 +3,8 @@ import numexpr as ne
 from math import pi
 from scipy.optimize import newton
 from scipy.signal import hilbert
+from scipy.interpolate import interp1d
+
 import matplotlib.pyplot as plt
 
 from novice_stakes import p_sca, nuttall_pulse
@@ -29,10 +31,7 @@ num_rays = 500
 theta_max = -1.5 * (pi / 180)
 
 ray_src = CLinear(c0, cm, z_src, num_rays, theta_max)
-
-fig, ax = plt.subplots()
-ax.plot(ray_src.launch_angles, ray_src.q)
-1/0
+ray_rcr = CLinear(c0, cm, z_rcr, num_rays, theta_max)
 
 # compute time/frequency domain parameters
 tau_lim = 10e-3
@@ -50,12 +49,27 @@ faxis = np.arange(num_t // 2 + 1) * fs / num_t
 sig_FT = np.fft.rfft(sig_y, num_t)
 
 # setup xaxis
-d_img = np.sqrt(x_rcr ** 2 + (z_src + z_rcr) ** 2)
-dflat = lambda x: np.sqrt(x ** 2 + z_src ** 2) \
-                    + np.sqrt((x_rcr - x) ** 2 + z_rcr ** 2) \
-                    - (d_img + tau_lim * c)
+tau_src_ier = interp1d(ray_src.rho, ray_src.travel_time, fill_value="extrapolate")
+tau_rcr_ier = interp1d(ray_rcr.rho, ray_rcr.travel_time, fill_value="extrapolate")
+
+x_test = np.arange(np.ceil(x_rcr * 1.2 / dx)) * dx
+x_test += ray_src.rho[0]
+
+dflat = lambda x: tau_src_ier(np.abs(x)) + tau_rcr_ier(np.abs(x_rcr - x))
+
+dflat_iso = lambda x: (np.sqrt(x ** 2 + z_src ** 2)
+                      + np.sqrt((x_rcr - x) ** 2 + z_rcr ** 2)) / c0
+
 fudgef = 5  # necassary because we don't know surface profile
-xbounds = (newton(dflat, 0) - fudgef, newton(dflat, x_rcr) + fudgef)
+
+tau_total = dflat(x_test)
+# find image ray delay and position at z=0
+i_img = np.argmin(tau_total)
+x_img = x_test[i_img]
+tau_img = tau_total[i_img]
+
+rooter = lambda x: dflat(x) - tau_img - tau_lim
+xbounds = (newton(rooter, 0) - fudgef, newton(rooter, x_rcr) + fudgef)
 
 numx = int(np.ceil((xbounds[1] - xbounds[0]) / dx)) + 1
 if numx % 2: numx += 1
@@ -63,14 +77,15 @@ xaxis = np.arange(numx) * dx + xbounds[0]
 
 # iterative process to compute yaxis
 # x_ref is best guess for x position of travel time minimum at y_max
-x_ref = z_src * d_img / (z_rcr + z_src)
+x_ref = x_img
 
 for i in range(10):
     # setup yaxis
-    dflat = lambda y: np.sqrt(x_ref ** 2 + y ** 2 + z_src ** 2) \
-                        + np.sqrt((x_rcr - x_ref) ** 2 + y ** 2 +  z_rcr ** 2) \
-                        - (d_img + tau_lim * c)
-    ymax = newton(dflat, tau_lim * c) + fudgef
+    rho_src = lambda y: np.sqrt(x_ref ** 2 + y ** 2)
+    rho_rcr = lambda y: np.sqrt((x_rcr - x_ref) ** 2 + y ** 2)
+    dflat = lambda y: tau_rcr_ier(rho_rcr(y)) + tau_src_ier(rho_src(y))
+    rooter = lambda y: dflat(y) - tau_img - tau_lim
+    ymax = newton(rooter, tau_lim * c) + fudgef
     # compute x-postion of travel time minimum at y_max
     d_ymax = np.sqrt(xaxis ** 2 + ymax ** 2 + z_src ** 2) \
         + np.sqrt((x_rcr - xaxis) ** 2 + ymax ** 2 + z_rcr ** 2)
@@ -82,7 +97,7 @@ for i in range(10):
 numy = int(np.ceil((2 * ymax / dx))) + 1
 if numy % 2: numy += 1
 yaxis = np.arange(numy) * dx - ymax
-
+1/0
 # 1-D calculations
 # compute full source vector for projection
 r_src = np.array([xaxis, np.full(xaxis.shape, -z_src)])

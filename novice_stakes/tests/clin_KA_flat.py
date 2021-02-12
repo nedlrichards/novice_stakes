@@ -8,7 +8,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 from novice_stakes import p_sca, nuttall_pulse
-from novice_stakes.refraction import CLinear
+from novice_stakes.refraction import CLinear, rays_to_surface
 
 plt.ion()
 
@@ -97,7 +97,10 @@ for i in range(10):
 numy = int(np.ceil((2 * ymax / dx))) + 1
 if numy % 2: numy += 1
 yaxis = np.arange(numy) * dx - ymax
+
+la_src = rays_to_surface(ray_src, xaxis, np.zeros_like(xaxis))
 1/0
+
 # 1-D calculations
 # compute full source vector for projection
 r_src = np.array([xaxis, np.full(xaxis.shape, -z_src)])

@@ -1,7 +1,7 @@
 import numpy as np
 from math import pi
 
-class CLinear:
+class CLinearFan:
     """Shoot a fan of rays to the surface, create an interpolator"""
 
     def __init__(self, c0, cm, z_src, num_rays, theta_min):

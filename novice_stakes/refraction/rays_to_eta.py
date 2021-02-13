@@ -1,8 +1,8 @@
 import numpy as np
 from math import pi
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500.):
+def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500., return_d2tau=False):
     """extrapolate from rays at z=0 to rays at z=eta"""
 
     axes = np.asarray(axes)
@@ -13,7 +13,7 @@ def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500.):
     elif np.ndim(axes) == 2 or np.ndim(axes) > 3:
         raise(ValueError('axes ndmin must be 1 or 3 (axis_num, x, y)'))
     else:
-        rho = axes
+        rho = np.abs(axes)
 
     if eta_p is not None:
         eta_p = np.asarray(eta_p)
@@ -27,7 +27,7 @@ def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500.):
 
 
     # relate surface position to launch angle
-    la_ier = interp1d(ray_fan.rho, ray_fan.launch_angles,
+    la_ier = interp1d(ray_fan.rho, ray_fan.launch_angles, kind=3,
                       bounds_error=False, fill_value=np.nan)
     la_n = la_ier(rho)
 
@@ -36,7 +36,7 @@ def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500.):
 
     # interpolate ray properties on the surface
     props = np.array([ray_fan.px, ray_fan.travel_time, ray_fan.q])
-    ray_ier = interp1d(ray_fan.launch_angles, props,
+    ray_ier = interp1d(ray_fan.launch_angles, props, kind=3,
                       bounds_error=False, fill_value=np.nan)
     rays = ray_ier(la_n1)
 
@@ -58,5 +58,16 @@ def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500.):
             proj_str = 'ij,ij->j'
 
         mag_proj = np.einsum(proj_str, proj_vec, n)
+
+    if return_d2tau:
+        #use chain rule to estimate second derivative of tau wrt y
+        if np.ndim(axes) != 1:
+            raise(ValueError("Stationary phase assumes 1D surface"))
+        tt_ier = UnivariateSpline(ray_fan.rho, ray_fan.travel_time, k=3, s=0)
+        d_tau_d_rho = tt_ier.derivative()
+
+        d2d = d_tau_d_rho(rho) / rho
+
+        return amp, travel_time, d2d
 
     return amp, travel_time

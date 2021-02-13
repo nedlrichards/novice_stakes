@@ -98,62 +98,62 @@ numy = int(np.ceil((2 * ymax / dx))) + 1
 if numy % 2: numy += 1
 yaxis = np.arange(numy) * dx - ymax
 
-la_src = rays_to_surface(ray_src, xaxis, np.zeros_like(xaxis))
-1/0
+src_amp, src_tt, src_d2d = rays_to_surface(ray_src, xaxis,
+                                           np.zeros_like(xaxis),
+                                           c0 + cm * z_src,
+                                           eta_p=np.zeros_like(xaxis),
+                                           return_d2tau=True)
 
-# 1-D calculations
-# compute full source vector for projection
-r_src = np.array([xaxis, np.full(xaxis.shape, -z_src)])
-d_src = np.linalg.norm(r_src, axis=0)
+rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
+                                           (x_rcr - xaxis),
+                                            np.zeros_like(xaxis),
+                                            c0 + cm * z_rcr,
+                                            return_d2tau=True)
 
-g_dx = np.zeros_like(xaxis)
-g_dz = np.ones_like(xaxis)
-
-n = np.array([g_dx, g_dz])
-proj_src = np.einsum('ik,ik->k', n, r_src) / d_src
+omega = 2 * pi * faxis[:, None]
+omega_c = 2 * pi * fc
 
 # greens function from source
-dpdn_g_as_point = -faxis[:, None] * proj_src / (2 *c * d_src) \
-                * np.exp(-2j * pi * faxis[:, None] * d_src / c)
+dpdn_g_as_point = -omega * src_amp * np.exp(-1j * omega * src_tt)
 
-dpdn_g_as_line = -1j * pi * faxis[:, None] * proj_src / (2 * c) \
-               * np.sqrt(2 * c / (pi * 2 * pi * faxis[:, None] * d_src)) \
-               * np.exp(-2j * pi * faxis[:, None] * d_src / c + 3j * pi / 4)
+dpdn_g_as_line = -1j * omega * np.sqrt(2 / (pi * omega_c * src_tt)) \
+               * np.exp(-1j * omega * src_tt + 3j * pi / 4)
 
 # receiver vector
-d_rcr = np.sqrt((x_rcr - xaxis) ** 2 + z_rcr ** 2)
+g_ra_point = rcr_amp * np.exp(-1j * omega * rcr_tt)
 
-g_ra_point = np.exp(-2j * pi * faxis[:, None] * d_rcr / c) / (4 * pi * d_rcr)
-
-g_ra_line = (1j / 4) * np.sqrt(2 * c / (pi * 2 * pi * faxis[:, None] * d_rcr)) \
-          * np.exp(-2j * pi * faxis[:, None] * d_rcr / c + 1j * pi / 4)
+g_ra_line = (1j / 4) * np.sqrt(2 / (pi * omega_c * rcr_tt)) \
+          * np.exp(-1j * omega * rcr_tt + 1j * pi / 4)
 
 # 2-D calculations
 # compute full 2D source vector for projection
-r_src = np.array([*np.meshgrid(xaxis, yaxis, indexing='ij'),
-                 np.full((numx, numy), -z_src)])
-d_src_2D = np.linalg.norm(r_src, axis=0)
-n = np.array([np.zeros_like(d_src_2D), np.zeros_like(d_src_2D), np.ones_like(d_src_2D)])
-proj_src_2D = np.einsum('ijk,ijk->jk', n, r_src) / d_src_2D
+axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
 
-r_rcr = np.array([*np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'),
-                 np.full((numx, numy), -z_rcr)])
-d_rcr_2D = np.linalg.norm(r_rcr, axis=0)
+src_amp_2D, src_tt_2D = rays_to_surface(ray_src, axes_src,
+                                  np.zeros_like(xaxis[0]), c0 + cm * z_src,
+                                  eta_p=np.zeros_like(axes_src))
+
+axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
+rcr_amp_2D, rcr_tt_2D = rays_to_surface(ray_rcr, axes_rcr,
+                                  np.zeros_like(xaxis), c0 + cm * z_rcr)
+
 
 # greens function from source
-f_ = faxis[:, None, None]
-ds_ = d_src_2D[None, :, :]
-dr_ = d_rcr_2D[None, :, :]
+omega_ = 2 * pi * faxis[:, None, None]
+aas_ = src_amp_2D[None, :, :]
+ara_ = rcr_amp_2D[None, :, :]
+ttas_ = src_tt_2D[None, :, :]
+ttra_ = rcr_tt_2D[None, :, :]
 
-ne_str = '-f_ * proj_src_2D / (2 * c * ds_) * exp(-2j * pi * f_ * ds_ / c)'
+
+ne_str = '-1j * omega_ * aas_ * exp(-1j * omega_ * ttas_)'
 dpdn_g_as_2D = ne.evaluate(ne_str)
 
 
-ne_str = 'exp(-2j * pi * f_ * dr_ / c) / (4 * pi * dr_)'
+ne_str = 'ara_ * exp(-1j * omega_ * ttra_)'
 g_ra_2D = ne.evaluate(ne_str)
 
 # surface integral for pressure at receiver
-tau_ref = d_img / c
 
 # 1-D geometry
 p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
@@ -161,8 +161,8 @@ p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
                            dx,
                            sig_FT,
                            faxis,
-                           (d_src + d_rcr) / c,
-                           tau_ref,
+                           src_tt + rcr_tt,
+                           tau_img,
                            tau_lim,
                            spreading=kc,
                            c=c)
@@ -171,15 +171,15 @@ p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
 
 # compute spreading factor for stationary phase approximation
 # second derivative of (d_src + d_rcr) wrt y
-d2d = 1 / d_src + 1 / d_rcr
+d2d = src_d2d + rcr_d2d
 
 p_rcr_sta, taxis_sta = p_sca(2 * dpdn_g_as_point,
                              g_ra_point,
                              dx,
                              sig_FT,
                              faxis,
-                             (d_src + d_rcr) / c,
-                             tau_ref,
+                             src_tt + rcr_tt,
+                             tau_img,
                              tau_lim,
                              spreading=d2d,
                              c=c)
@@ -190,20 +190,20 @@ p_rcr_2D, taxis_2D = p_sca(2 * dpdn_g_as_2D,
                            dx,
                            sig_FT,
                            faxis,
-                           (d_src_2D + d_rcr_2D) / c,
-                           tau_ref,
+                           rcr_tt_2D + src_tt_2D,
+                           tau_img,
                            tau_lim,
                            c=c)
 
 # compute reference amplitudes
-p_ref_1D = np.sqrt(2 / (pi * kc * d_img)) / 4
-p_ref_2D = 1 / (4 * pi * d_img)
+p_ref_1D = np.sqrt(2 / (pi * omega_c * tau_img)) / 4
+p_ref_2D = 1 / (4 * pi * tau_img / c0)
 
 p_sca_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr_1D))) - 20 * np.log10(p_ref_1D)
 p_sca_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr_sta))) - 20 * np.log10(p_ref_2D)
 p_sca_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr_2D))) - 20 * np.log10(p_ref_2D)
 
 fig, ax = plt.subplots()
-ax.plot((taxis_1D - tau_ref) * 1e3, p_sca_dB_1D)
-ax.plot((taxis_sta - tau_ref) * 1e3, p_sca_dB_sta)
-ax.plot((taxis_2D - tau_ref) * 1e3, p_sca_dB_2D)
+ax.plot((taxis_1D - tau_img) * 1e3, p_sca_dB_1D)
+ax.plot((taxis_sta - tau_img) * 1e3, p_sca_dB_sta)
+ax.plot((taxis_2D - tau_img) * 1e3, p_sca_dB_2D)

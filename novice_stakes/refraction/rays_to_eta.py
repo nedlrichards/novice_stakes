@@ -2,7 +2,8 @@ import numpy as np
 from math import pi
 from scipy.interpolate import interp1d, UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500., return_d2tau=False):
+def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
+                    return_d2tau=False, spreading='point'):
     """extrapolate from rays at z=0 to rays at z=eta"""
 
     axes = np.asarray(axes)
@@ -41,8 +42,16 @@ def rays_to_surface(ray_fan, axes, eta, c_src, eta_p=None, c_surf=1500., return_
     rays = ray_ier(la_n1)
 
     travel_time = rays[1]
-    # dynamic ray amplitude from COA (3.65)
-    amp = np.sqrt(np.abs(rays[0] * c_src / (rho * rays[2]))) / (4 * pi)
+
+    if np.ndim(axes) == 1 and spreading == 'line':
+        # line source dynamic ray amplitude
+        c_src = np.cos(la_n1) / rays[0]
+        amp = np.sqrt(np.abs(c_surf / (c_src * rays[2])))
+        amp *= np.exp((3j * pi / 4) / np.sqrt(8 * pi * kc)
+    else:
+        # point source dynamic ray amplitude, COA (3.65)
+        amp = np.sqrt(np.abs(rays[0] * c_surf / (rho * rays[2])))
+        amp /= 4 * pi
 
     # compute ray normal derivative projection vector
     if eta_p is not None:

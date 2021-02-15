@@ -9,6 +9,8 @@ class IsoSpeedFan:
         self.c0 = c0
         self.z_src = z_src
         self.c_src = c0
+        # remove negative launch angles
+        theta_min = max(0.001, theta_min)
         self.launch_angles = np.linspace(pi / 2 - 0.001, theta_min, num_rays)
         # properties at z=0
         self.px = None  # Horizontal slowness
@@ -26,8 +28,7 @@ class IsoSpeedFan:
         travel_time = np.empty_like(self.launch_angles)
         q = np.empty_like(self.launch_angles)
 
-        # a from COA (3.209), snells law constant
         self.px = np.cos(self.launch_angles) / self.c0
-        self.rho = self.z_src / np.arctan(self.launch_angles)
-        self.q = self.z_src / np.sin(self.launch_angles)
-        self.travel_time = (self.z_src / np.sin(self.launch_angles)) / self.c0
+        self.rho = np.abs(self.z_src) / np.tan(self.launch_angles)
+        self.q = np.abs(self.z_src) / np.sin(self.launch_angles)
+        self.travel_time = np.abs(self.z_src / np.sin(self.launch_angles)) / self.c0

@@ -2,8 +2,7 @@ import numpy as np
 from math import pi
 from scipy.interpolate import interp1d, UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
-                    return_d2tau=False, spreading='point'):
+def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500., kc=None):
     """extrapolate from rays at z=0 to rays at z=eta"""
 
     axes = np.asarray(axes)
@@ -25,8 +24,6 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
         else:
             n = np.array([-eta_p, np.ones_like(eta_p)])
 
-
-
     # relate surface position to launch angle
     la_ier = interp1d(ray_fan.rho, ray_fan.launch_angles, kind=3,
                       bounds_error=False, fill_value=np.nan)
@@ -43,11 +40,11 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
 
     travel_time = rays[1]
 
-    if np.ndim(axes) == 1 and spreading == 'line':
+    if np.ndim(axes) == 1 and kc is not None:
         # line source dynamic ray amplitude
         c_src = np.cos(la_n1) / rays[0]
-        amp = np.sqrt(np.abs(c_surf / (c_src * rays[2])))
-        amp *= np.exp((3j * pi / 4) / np.sqrt(8 * pi * kc)
+        amp = np.sqrt(np.abs(c_surf / (c_src * rays[2]))) + 0j
+        amp *= np.exp(3j * pi / 4) / np.sqrt(8 * pi * kc)
     else:
         # point source dynamic ray amplitude, COA (3.65)
         amp = np.sqrt(np.abs(rays[0] * c_surf / (rho * rays[2])))
@@ -57,6 +54,7 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
     if eta_p is not None:
         cos_theta = rays[0] * c_surf
         sin_theta = np.sqrt(1 - cos_theta ** 2)
+
         if np.ndim(eta_p) == 3:
             proj_vec = np.array([np.cos(phi) * cos_theta,
                                  np.sin(phi) * cos_theta,
@@ -67,16 +65,16 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, c_surf=1500.,
             proj_str = 'ij,ij->j'
 
         mag_proj = np.einsum(proj_str, proj_vec, n)
+        amp *= mag_proj
 
-    if return_d2tau:
+    if kc is None:
         #use chain rule to estimate second derivative of tau wrt y
-        if np.ndim(axes) != 1:
-            raise(ValueError("Stationary phase assumes 1D surface"))
-        tt_ier = UnivariateSpline(ray_fan.rho, ray_fan.travel_time, k=3, s=0)
-        d_tau_d_rho = tt_ier.derivative()
-
-        d2d = d_tau_d_rho(rho) / rho
-
-        return amp, travel_time, d2d
+        if np.ndim(axes) == 1:
+            tt_ier = UnivariateSpline(ray_fan.rho,
+                                      ray_fan.travel_time,
+                                      k=3, s=0)
+            d_tau_d_rho = tt_ier.derivative()
+            d2d = d_tau_d_rho(rho) / rho
+            return amp, travel_time, d2d
 
     return amp, travel_time

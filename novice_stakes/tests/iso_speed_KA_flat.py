@@ -140,7 +140,7 @@ p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
 
 # compute spreading factor for stationary phase approximation
 # second derivative of (d_src + d_rcr) wrt y
-d2d = 1 / d_src + 1 / d_rcr
+d2d = (1 / d_src + 1 / d_rcr) / c
 
 p_rcr_sta, taxis_sta = p_sca(2 * dpdn_g_as_point,
                              g_ra_point,

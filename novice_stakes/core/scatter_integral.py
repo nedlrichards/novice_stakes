@@ -32,8 +32,11 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
     elif spreading.size == dpdn_g_as.shape[-1]:
         # point source, calculated with stationary phase at y=0
         igrand_scale = dx
-        s_term_ = np.sqrt(c / (faxis[:, None] * spreading[None, tau_i])) \
+        s_term_ = np.sqrt(1 / (faxis[:, None] * spreading[None, tau_i])) \
                   * np.exp(-1j * pi / 4)
+        #s_term_ = np.sqrt(c / (faxis[:, None] * spreading[None, tau_i])) \
+                  #* np.exp(-1j * pi / 4)
+
     elif spreading.size == 1:
         # line source
         igrand_scale = dx

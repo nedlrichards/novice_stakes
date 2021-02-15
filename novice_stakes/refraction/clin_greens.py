@@ -29,33 +29,32 @@ class CLinearFan:
         q = np.empty_like(self.launch_angles)
 
         # a from COA (3.209), snells law constant
-        a = np.cos(self.launch_angles) / self.c_src
-        px = np.arccos(a * self.c0)  # grazing angle at the surface
+        px = np.cos(self.launch_angles) / self.c_src
 
         # sin of angles used frequenctly
-        sin_init = dsin = np.sqrt(1 - (a * self.c_src) ** 2)
-        sin_final = np.sqrt(1 - (a * self.c0) ** 2)
+        sin_init = dsin = np.sqrt(1 - (px * self.c_src) ** 2)
+        sin_final = np.sqrt(1 - (px * self.c0) ** 2)
         # radius of circluar paths
-        radius = -1 / (a * self.cm)
+        radius = -1 / (px * self.cm)
 
         # positive launch angles have a turning point
         li = self.launch_angles >= 0
 
         rho[li] = (sin_final[li] - sin_init[li]) * radius[li]
 
-        travel_time[li] = np.log((1 + sin_final[li]) / (a[li] * self.c0)) \
-                        - np.log((1 + sin_init[li]) / (a[li] * self.c_src))
+        travel_time[li] = np.log((1 + sin_final[li]) / (px[li] * self.c0)) \
+                        - np.log((1 + sin_init[li]) / (px[li] * self.c_src))
 
-        q[li] = sin_final[li] / a[li] ** 2 - sin_init[li] / a[li] ** 2
+        q[li] = sin_final[li] / px[li] ** 2 - sin_init[li] / px[li] ** 2
 
        # negative launch angle have one turning point
         li = self.launch_angles < 0
         rho[li] = (sin_init[li] + sin_final[li]) * radius[li]
 
-        travel_time[li] = np.log((1 + sin_final[li]) / (a[li] * self.c0)) \
-                        + np.log((1 + sin_init[li]) / (a[li] * self.c_src))
+        travel_time[li] = np.log((1 + sin_final[li]) / (px[li] * self.c0)) \
+                        + np.log((1 + sin_init[li]) / (px[li] * self.c_src))
 
-        q[li] = sin_final[li] / a[li] ** 2 + sin_init[li] / a[li] ** 2
+        q[li] = sin_final[li] / px[li] ** 2 + sin_init[li] / px[li] ** 2
 
         q /= -self.c_src * self.cm
         travel_time /= np.abs(self.cm)

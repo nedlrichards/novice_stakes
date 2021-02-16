@@ -136,13 +136,13 @@ g_ra_line = rcr_amp_line * np.exp(-1j * omega * rcr_tt_line)
 axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
 src_amp_2D, src_tt_2D = rays_to_surface(ray_src,
                                         axes_src,
-                                        np.zeros_like(xaxis[0]),
+                                        np.zeros_like(axes_src[0]),
                                         eta_p=np.zeros_like(axes_src))
 
 axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
 rcr_amp_2D, rcr_tt_2D = rays_to_surface(ray_rcr,
                                         axes_rcr,
-                                        np.zeros_like(xaxis))
+                                        np.zeros_like(axes_rcr[0]))
 
 
 # greens function from source

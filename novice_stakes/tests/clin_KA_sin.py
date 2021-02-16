@@ -14,12 +14,19 @@ plt.ion()
 
 z_src = -105
 z_rcr = -15
+dz_src = 2
 x_rcr = 460
 
 c = 1500
 fc = 1e3
 fs = 2.25e3 * 2
 kc = 2 * pi * fc / c
+
+# sinusoid parameters
+H = 2
+L = 40
+Phi = 0
+K = 2 * pi / L
 
 decimation = 8
 dx = c / (decimation * fc)
@@ -30,8 +37,8 @@ cm = -0.017
 num_rays = 500
 theta_max = -1.5 * (pi / 180)
 
-ray_src = CLinearFan(c0, cm, z_src, num_rays, theta_max)
-ray_rcr = CLinearFan(c0, cm, z_rcr, num_rays, theta_max)
+ray_src = CLinearFan(c0, cm, z_src - dz_src, num_rays, theta_max)
+ray_rcr = CLinearFan(c0, cm, z_rcr - dz_src, num_rays, theta_max)
 
 # compute time/frequency domain parameters
 tau_lim = 10e-3
@@ -98,24 +105,28 @@ numy = int(np.ceil((2 * ymax / dx))) + 1
 if numy % 2: numy += 1
 yaxis = np.arange(numy) * dx - ymax
 
+# wave profile
+eta = (H / 2) * np.cos(K * xaxis + Phi)
+eta_dx = -(H * K / 2) * np.sin(K * xaxis + Phi)
+
 src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
                                            xaxis,
-                                           np.zeros_like(xaxis),
-                                           eta_p=np.zeros_like(xaxis))
+                                           dz_src + eta,
+                                           eta_p=eta_dx)
 
 rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
                                            x_rcr - xaxis,
-                                           np.zeros_like(xaxis))
+                                           dz_src + eta)
 
 src_amp_line, src_tt_line = rays_to_surface(ray_src,
                                             xaxis,
-                                            np.zeros_like(xaxis),
-                                            eta_p=np.zeros_like(xaxis),
+                                            dz_src + eta,
+                                            eta_p=eta_dx,
                                             kc=kc)
 
 rcr_amp_line, rcr_tt_line = rays_to_surface(ray_rcr,
                                             np.abs(x_rcr - xaxis),
-                                            np.zeros_like(xaxis),
+                                            dz_src + eta,
                                             kc=kc)
 
 
@@ -134,15 +145,19 @@ g_ra_line = rcr_amp_line * np.exp(-1j * omega * rcr_tt_line)
 # 2-D calculations
 # compute full 2D source vector for projection
 axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
+eta_2D = np.broadcast_to(eta[:, None], axes_src[0].shape)
+eta_p_2D = np.broadcast_to(eta_dx[:, None], axes_src[0].shape)
+eta_p_2D = np.array([eta_p_2D, np.zeros_like(eta_p_2D)])
+
 src_amp_2D, src_tt_2D = rays_to_surface(ray_src,
                                         axes_src,
-                                        np.zeros_like(axes_src[0]),
-                                        eta_p=np.zeros_like(axes_src))
+                                        dz_src + eta_2D,
+                                        eta_p=eta_p_2D)
 
 axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
 rcr_amp_2D, rcr_tt_2D = rays_to_surface(ray_rcr,
                                         axes_rcr,
-                                        np.zeros_like(axes_rcr[0]))
+                                        dz_src + eta_2D)
 
 # greens function from source
 omega_ = 2 * pi * faxis[:, None, None]

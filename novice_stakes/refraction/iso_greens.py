@@ -6,12 +6,12 @@ class IsoSpeedFan:
 
     def __init__(self, c0, z_src, num_rays, theta_min):
         """Initilize rays"""
-        self.c0 = c0
         self.z_src = z_src
+        self.c0 = c0
         self.c_src = c0
         # remove negative launch angles
         theta_min = max(0.001, theta_min)
-        self.launch_angles = np.linspace(pi / 2 - 0.001, theta_min, num_rays)
+        self.launch_angles = np.linspace(pi / 2, theta_min, num_rays)
         # properties at z=0
         self.px = None  # Horizontal slowness
         self.rho = None  # cylindrical range

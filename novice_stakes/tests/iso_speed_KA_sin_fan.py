@@ -23,7 +23,7 @@ fs = 2.25e3 * 2
 kc = 2 * pi * fc / c
 
 # sinusoid parameters
-H = 0
+H = 2
 L = 40
 Phi = 0
 K = 2 * pi / L
@@ -33,7 +33,6 @@ dx = c / (decimation * fc)
 
 # compute source and receiver ray fans
 c0 = 1500
-cm = -0.017
 num_rays = 500
 theta_max = -1.5 * (pi / 180)
 
@@ -41,7 +40,7 @@ ray_src = IsoSpeedFan(c0, z_src + dz_surf, num_rays, theta_max)
 ray_rcr = IsoSpeedFan(c0, z_rcr + dz_surf, num_rays, theta_max)
 
 # compute time/frequency domain parameters
-tau_lim = 10e-3
+tau_lim = 25e-3
 
 # transmitted signal
 sig_y, sig_t = nuttall_pulse(fc, fs)
@@ -109,45 +108,25 @@ yaxis = np.arange(numy) * dx - ymax
 eta = (H / 2) * np.cos(K * xaxis + Phi)
 eta_dx = -(H * K / 2) * np.sin(K * xaxis + Phi)
 
-
 src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
                                            xaxis,
                                            dz_surf + eta,
-                                           1500., 1500.,
                                            eta_p=eta_dx)
 
 rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
                                            x_rcr - xaxis,
-                                           dz_surf + eta,
-                                           1500., 1500.)
-                                           #eta)
+                                           dz_surf + eta)
 
 src_amp_line, src_tt_line = rays_to_surface(ray_src,
                                             xaxis,
                                             dz_surf + eta,
-                                            1500., 1500.,
                                             eta_p=eta_dx,
                                             kc=kc)
 
 rcr_amp_line, rcr_tt_line = rays_to_surface(ray_rcr,
                                             np.abs(x_rcr - xaxis),
                                             dz_surf + eta,
-                                            1500., 1500.,
                                             kc=kc)
-
-#surf_dist = np.sqrt(xaxis ** 2 + (z_src + dz_surf - eta) ** 2) \
-           #+ np.sqrt((x_rcr - xaxis) ** 2 + (z_rcr + dz_surf - eta) ** 2)
-
-surf_dist = np.sqrt(xaxis ** 2 + (z_src - eta) ** 2)
-           #+ np.sqrt((x_rcr - xaxis) ** 2 + (z_rcr - eta) ** 2)
-
-fig, ax = plt.subplots()
-ax.plot(xaxis, src_tt)
-#ax.plot(xaxis, src_tt + rcr_tt)
-ax.plot(xaxis, surf_dist / c, ':')
-
-1/0
-
 
 omega = 2 * pi * faxis[:, None]
 omega_c = 2 * pi * fc
@@ -171,14 +150,12 @@ eta_p_2D = np.array([eta_p_2D, np.zeros_like(eta_p_2D)])
 src_amp_2D, src_tt_2D = rays_to_surface(ray_src,
                                         axes_src,
                                         dz_surf + eta_2D,
-                                        1500., 1500.,
                                         eta_p=eta_p_2D)
 
 axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
 rcr_amp_2D, rcr_tt_2D = rays_to_surface(ray_rcr,
                                         axes_rcr,
-                                        dz_surf + eta_2D,
-                                        1500., 1500.)
+                                        dz_surf + eta_2D)
 
 # greens function from source
 omega_ = 2 * pi * faxis[:, None, None]
@@ -249,3 +226,4 @@ fig, ax = plt.subplots()
 ax.plot((taxis_1D - tau_img) * 1e3, p_sca_dB_1D)
 ax.plot((taxis_sta - tau_img) * 1e3, p_sca_dB_sta)
 ax.plot((taxis_2D - tau_img) * 1e3, p_sca_dB_2D)
+ax.set_ylim(-80, 5)

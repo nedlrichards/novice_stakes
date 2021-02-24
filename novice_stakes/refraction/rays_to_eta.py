@@ -2,7 +2,7 @@ import numpy as np
 from math import pi
 from scipy.interpolate import interp1d, UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, c_src, c_surf, eta_p=None, kc=None):
+def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None):
     """extrapolate from rays at z=0 to rays at z=eta"""
 
     axes = np.asarray(axes)
@@ -28,7 +28,7 @@ def rays_to_surface(ray_fan, axes, eta, c_src, c_surf, eta_p=None, kc=None):
     px_ier = interp1d(ray_fan.rho, ray_fan.px, kind=3,
                       bounds_error=False, fill_value=np.nan)
     px_n = px_ier(rho)
-    cos_n = px_n * c_surf
+    cos_n = px_n * ray_fan.c0
     sin_n = np.sqrt(1 - cos_n ** 2)
     d_rho = -eta * cos_n / sin_n
 
@@ -39,22 +39,22 @@ def rays_to_surface(ray_fan, axes, eta, c_src, c_surf, eta_p=None, kc=None):
 
     # adjust travel time and amplitude for extra distance
     r_surf = np.sqrt(eta ** 2 + d_rho ** 2)
-    travel_time = rays[0] + r_surf / c_surf
+    travel_time = rays[0] + r_surf / ray_fan.c0
 
-    q = rays[1] + c_surf * r_surf / c_src
+    q = rays[1] + ray_fan.c0 * r_surf / ray_fan.c_src
 
     if np.ndim(axes) == 1 and kc is not None:
         # line source dynamic ray amplitude
-        amp = np.sqrt(np.abs(c_surf / (c_src * q))) + 0j
+        amp = np.sqrt(np.abs(ray_fan.c0 / (ray_fan.c_src * q))) + 0j
         amp *= np.exp(3j * pi / 4) / np.sqrt(8 * pi * kc)
     else:
         # point source dynamic ray amplitude, COA (3.65)
-        amp = np.sqrt(np.abs(px_n * c_surf / (rho * q)))
+        amp = np.sqrt(np.abs(px_n * ray_fan.c0 / (rho * q)))
         amp /= 4 * pi
 
     # compute ray normal derivative projection vector
     if eta_p is not None:
-        cos_theta = px_n * c_surf
+        cos_theta = px_n * ray_fan.c0
         sin_theta = np.sqrt(1 - cos_theta ** 2)
 
         if np.ndim(eta_p) == 3:

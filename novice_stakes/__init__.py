@@ -8,5 +8,6 @@ Novice stakes: :mod:`novice_stakes`
 Basic specification of scatter enviornments
 
 """
-from .import core
+from . import core
 from .core import *
+from . import surfaces

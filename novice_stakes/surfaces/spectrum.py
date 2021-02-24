@@ -4,6 +4,18 @@ from math import pi
 g = 9.81
 km = 370  # wavenumber at GC wave phase speed minimum
 
+def lorentzian(kaxis, rms_height, correlation_length):
+    """Compute the Lorentzian spectrum as a function of wavenumber"""
+
+    ms = rms_height ** 2
+    kappa = 1 / correlation_length
+
+    s_lor = ms * kappa \
+          / (pi * (kaxis ** 2 + kappa ** 2))
+
+    return s_lor
+
+
 def PM(axis_in, U20, is_omega=True):
     """Compute the Pierson-Moskowitz spectrum by radial frequency"""
 
@@ -36,7 +48,7 @@ def directional_spectrum(delta, bearing, k_grid, omni_spectrum):
     # multiply omni-directional spectrum with spreading function
     d_spec = omni_spectrum * spreading / k_grid
 
-    d_spec[np.isnan(spreading)] = 0
+    d_spec[np.isnan(d_spec)] = 0
     return d_spec
 
 # directional spectrum formulations

@@ -37,11 +37,11 @@ cm = -0.017
 num_rays = 500
 theta_max = -1.5 * (pi / 180)
 
-ray_src = CLinearFan(c0, cm, z_src - dz_src, num_rays, theta_max)
-ray_rcr = CLinearFan(c0, cm, z_rcr - dz_src, num_rays, theta_max)
+ray_src = CLinearFan(c0, cm, z_src + dz_src, num_rays, theta_max)
+ray_rcr = CLinearFan(c0, cm, z_rcr + dz_src, num_rays, theta_max)
 
 # compute time/frequency domain parameters
-tau_lim = 10e-3
+tau_lim = 25e-3
 
 # transmitted signal
 sig_y, sig_t = nuttall_pulse(fc, fs)
@@ -137,7 +137,6 @@ omega_c = 2 * pi * fc
 dpdn_g_as_point = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c
 dpdn_g_as_line = -1j * omega * src_amp_line * np.exp(-1j * omega * src_tt_line) / c
 
-
 # receiver vector
 g_ra_point = rcr_amp * np.exp(-1j * omega * rcr_tt)
 g_ra_line = rcr_amp_line * np.exp(-1j * omega * rcr_tt_line)
@@ -228,3 +227,5 @@ fig, ax = plt.subplots()
 ax.plot((taxis_1D - tau_img) * 1e3, p_sca_dB_1D)
 ax.plot((taxis_sta - tau_img) * 1e3, p_sca_dB_sta)
 ax.plot((taxis_2D - tau_img) * 1e3, p_sca_dB_2D)
+
+ax.set_ylim(-80, 5)

@@ -27,7 +27,7 @@ decimation = 8
 dx = c / (decimation * fc)
 
 # compute time/frequency domain parameters
-tau_lim = 40e-3
+tau_lim = 25e-3
 
 # transmitted signal
 sig_y, sig_t = nuttall_pulse(fc, fs)
@@ -96,7 +96,7 @@ dpdn_g_as_line = -1j * pi * faxis[:, None] * proj_src / (2 * c) \
                * np.exp(-2j * pi * faxis[:, None] * d_src / c + 3j * pi / 4)
 
 # receiver vector
-d_rcr = np.sqrt((x_rcr - xaxis) ** 2 + z_rcr ** 2)
+d_rcr = np.sqrt((x_rcr - xaxis) ** 2 + (z_rcr - eta) ** 2)
 
 g_ra_point = np.exp(-2j * pi * faxis[:, None] * d_rcr / c) / (4 * pi * d_rcr)
 
@@ -115,7 +115,7 @@ n = np.array([-eta_dx_2D, np.zeros_like(d_src_2D), np.ones_like(d_src_2D)])
 proj_src_2D = np.einsum('ijk,ijk->jk', n, r_src) / d_src_2D
 
 r_rcr = np.array([*np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'),
-                 np.full((numx, numy), -z_rcr)])
+                 np.full((numx, numy), (z_rcr - eta_2D))])
 d_rcr_2D = np.linalg.norm(r_rcr, axis=0)
 
 # greens function from source
@@ -185,3 +185,5 @@ fig, ax = plt.subplots()
 ax.plot((taxis_1D - tau_ref) * 1e3, p_sca_dB_1D)
 ax.plot((taxis_sta - tau_ref) * 1e3, p_sca_dB_sta)
 ax.plot((taxis_2D - tau_ref) * 1e3, p_sca_dB_2D)
+
+ax.set_ylim(-80, 5)

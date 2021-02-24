@@ -7,8 +7,8 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca, p_sca_fan, initialize_nuttall, initialize_axes
-from novice_stakes.refraction import CLinearFan, rays_to_surface
+from novice_stakes import p_sca_fan, initialize_nuttall, initialize_axes
+from novice_stakes.refraction import CLinearFan
 
 plt.ion()
 
@@ -45,26 +45,27 @@ eta_p = np.zeros_like(xaxis)
 eta_2D = np.zeros((xaxis.size, yaxis.size))
 eta_p_2D = np.zeros((2, xaxis.size, yaxis.size))
 
-fig, ax = plt.subplots()
-
 # stationary phase results
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr_sta, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, None)
-p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
-ax.plot((t_rcr - tau_img) * 1e3, p_dB)
+p_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
 # line source result
 kc = 2 * pi * fc / c0
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr_1D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, kc)
-p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
-ax.plot((t_rcr - tau_img) * 1e3, p_dB)
+p_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
 # 2-D result
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr_2D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta_2D, eta_p_2D,
                                 tau_img, tau_lim, faxis, sig_FT, yaxis)
-p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
-ax.plot((t_rcr - tau_img) * 1e3, p_dB)
+p_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
+
+fig, ax = plt.subplots()
+
+ax.plot((t_rcr_sta - tau_img) * 1e3, p_dB_sta)
+ax.plot((t_rcr_1D - tau_img) * 1e3, p_dB_1D)
+ax.plot((t_rcr_2D - tau_img) * 1e3, p_dB_2D)

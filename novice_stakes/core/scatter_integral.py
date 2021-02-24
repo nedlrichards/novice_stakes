@@ -55,7 +55,7 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
     return p_sca, taxis
 
 def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
-              tau_img, tau_lim, faxis, sig_FT, spreading):
+              tau_img, tau_lim, faxis, sig_FT, spreading, dz_iso=0):
 
     dx = (xaxis[-1] - xaxis[0]) / (xaxis.size - 1)
     omega = 2 * pi * faxis[:, None]
@@ -66,11 +66,11 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
         isline = False
         src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
                                                    xaxis,
-                                                   eta,
+                                                   dz_iso + eta,
                                                    eta_p=eta_p)
         rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
                                                    np.abs(x_rcr - xaxis),
-                                                   eta)
+                                                   dz_iso + eta)
 
         # greens function from source
         dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
@@ -88,19 +88,18 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
         kc = float(spreading)
         src_amp, src_tt = rays_to_surface(ray_src,
                                         xaxis,
-                                        eta,
+                                        dz_iso + eta,
                                         eta_p=eta_p,
                                         kc=kc)
 
         rcr_amp, rcr_tt = rays_to_surface(ray_rcr,
                                         np.abs(x_rcr - xaxis),
-                                        eta,
+                                        dz_iso + eta,
                                         kc=kc)
         # greens function from source
         dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
         # greens function to receiver
         g_ra = rcr_amp * np.exp(-1j * omega * rcr_tt)
-
 
     elif spreading.size > 1:
         # 2-D calculations
@@ -113,12 +112,12 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
 
         src_amp, src_tt = rays_to_surface(ray_src,
                                           axes_src,
-                                          eta,
+                                          dz_iso + eta,
                                           eta_p=eta_p)
 
         rcr_amp, rcr_tt = rays_to_surface(ray_rcr,
                                           axes_rcr,
-                                          eta)
+                                          dz_iso + eta)
 
         # greens function from source
         omega_ = 2 * pi * faxis[:, None, None]

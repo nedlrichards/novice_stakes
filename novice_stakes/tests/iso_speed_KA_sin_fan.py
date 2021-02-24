@@ -7,20 +7,19 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca, nuttall_pulse
-from novice_stakes.refraction import IsoSpeedFan, rays_to_surface
+from novice_stakes import p_sca_fan, initialize_nuttall, initialize_axes
+from novice_stakes.refraction import IsoSpeedFan
 
 plt.ion()
 
 z_src = -105
 z_rcr = -15
-dz_surf = 1
+dz_iso = 2
 x_rcr = 460
 
-c = 1500
 fc = 1e3
 fs = 2.25e3 * 2
-kc = 2 * pi * fc / c
+tau_lim = 25e-3
 
 # sinusoid parameters
 H = 2
@@ -28,202 +27,53 @@ L = 40
 Phi = 0
 K = 2 * pi / L
 
-decimation = 8
-dx = c / (decimation * fc)
-
 # compute source and receiver ray fans
 c0 = 1500
 num_rays = 500
-theta_max = -1.5 * (pi / 180)
+theta_max = 0.1 * (pi / 180)
 
-ray_src = IsoSpeedFan(c0, z_src + dz_surf, num_rays, theta_max)
-ray_rcr = IsoSpeedFan(c0, z_rcr + dz_surf, num_rays, theta_max)
+ray_src = IsoSpeedFan(c0, z_src + dz_iso, num_rays, theta_max)
+ray_rcr = IsoSpeedFan(c0, z_rcr + dz_iso, num_rays, theta_max)
 
 # compute time/frequency domain parameters
-tau_lim = 25e-3
-
-# transmitted signal
-sig_y, sig_t = nuttall_pulse(fc, fs)
-
-# compute t and f axes
-num_t = int(np.ceil(tau_lim * fs + sig_y.size))
-if num_t % 2: num_t += 1
-
-# flat surface specifications
-# compute FT of transmitted signal
-faxis = np.arange(num_t // 2 + 1) * fs / num_t
-sig_FT = np.fft.rfft(sig_y, num_t)
+faxis, dx, sig_FT = initialize_nuttall(fc, fs, c0, tau_lim)
 
 # setup xaxis
 tau_src_ier = interp1d(ray_src.rho, ray_src.travel_time, fill_value="extrapolate")
 tau_rcr_ier = interp1d(ray_rcr.rho, ray_rcr.travel_time, fill_value="extrapolate")
-
-x_test = np.arange(np.ceil(x_rcr * 1.2 / dx)) * dx
-x_test += ray_src.rho[0]
-
-dflat = lambda x: tau_src_ier(np.abs(x)) + tau_rcr_ier(np.abs(x_rcr - x))
-
-dflat_iso = lambda x: (np.sqrt(x ** 2 + z_src ** 2)
-                      + np.sqrt((x_rcr - x) ** 2 + z_rcr ** 2)) / c0
-
-fudgef = 5  # necassary because we don't know surface profile
-
-tau_total = dflat(x_test)
-# find image ray delay and position at z=0
-i_img = np.argmin(tau_total)
-x_img = x_test[i_img]
-tau_img = tau_total[i_img]
-
-rooter = lambda x: dflat(x) - tau_img - tau_lim
-xbounds = (newton(rooter, 0) - fudgef, newton(rooter, x_rcr) + fudgef)
-
-numx = int(np.ceil((xbounds[1] - xbounds[0]) / dx)) + 1
-if numx % 2: numx += 1
-xaxis = np.arange(numx) * dx + xbounds[0]
-
-# iterative process to compute yaxis
-# x_ref is best guess for x position of travel time minimum at y_max
-x_ref = x_img
-
-for i in range(10):
-    # setup yaxis
-    rho_src = lambda y: np.sqrt(x_ref ** 2 + y ** 2)
-    rho_rcr = lambda y: np.sqrt((x_rcr - x_ref) ** 2 + y ** 2)
-    dflat = lambda y: tau_rcr_ier(rho_rcr(y)) + tau_src_ier(rho_src(y))
-    rooter = lambda y: dflat(y) - tau_img - tau_lim
-    ymax = newton(rooter, tau_lim * c) + fudgef
-    # compute x-postion of travel time minimum at y_max
-    d_ymax = np.sqrt(xaxis ** 2 + ymax ** 2 + z_src ** 2) \
-        + np.sqrt((x_rcr - xaxis) ** 2 + ymax ** 2 + z_rcr ** 2)
-    x_nxt = xaxis[np.argmin(d_ymax)]
-    if x_ref - x_nxt == 0:
-        break
-    x_ref = x_nxt
-
-numy = int(np.ceil((2 * ymax / dx))) + 1
-if numy % 2: numy += 1
-yaxis = np.arange(numy) * dx - ymax
+xaxis, yaxis, tau_img = initialize_axes(tau_src_ier, tau_rcr_ier, tau_lim, x_rcr, dx)
 
 # wave profile
 eta = (H / 2) * np.cos(K * xaxis + Phi)
-eta_dx = -(H * K / 2) * np.sin(K * xaxis + Phi)
+eta_p = -(H * K / 2) * np.sin(K * xaxis + Phi)
 
-src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
-                                           xaxis,
-                                           dz_surf + eta,
-                                           eta_p=eta_dx)
-
-rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
-                                           x_rcr - xaxis,
-                                           dz_surf + eta)
-
-src_amp_line, src_tt_line = rays_to_surface(ray_src,
-                                            xaxis,
-                                            dz_surf + eta,
-                                            eta_p=eta_dx,
-                                            kc=kc)
-
-rcr_amp_line, rcr_tt_line = rays_to_surface(ray_rcr,
-                                            np.abs(x_rcr - xaxis),
-                                            dz_surf + eta,
-                                            kc=kc)
-
-omega = 2 * pi * faxis[:, None]
-omega_c = 2 * pi * fc
-
-# greens function from source
-dpdn_g_as_point = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c
-dpdn_g_as_line = -1j * omega * src_amp_line * np.exp(-1j * omega * src_tt_line) / c
-
-
-# receiver vector
-g_ra_point = rcr_amp * np.exp(-1j * omega * rcr_tt)
-g_ra_line = rcr_amp_line * np.exp(-1j * omega * rcr_tt_line)
-
-# 2-D calculations
-# compute full 2D source vector for projection
-axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
-eta_2D = np.broadcast_to(eta[:, None], axes_src[0].shape)
-eta_p_2D = np.broadcast_to(eta_dx[:, None], axes_src[0].shape)
+# 2-D profile
+eta_2D = np.broadcast_to(eta[:, None], (xaxis.size, yaxis.size))
+eta_p_2D = np.broadcast_to(eta_p[:, None],(xaxis.size,  yaxis.size))
 eta_p_2D = np.array([eta_p_2D, np.zeros_like(eta_p_2D)])
 
-src_amp_2D, src_tt_2D = rays_to_surface(ray_src,
-                                        axes_src,
-                                        dz_surf + eta_2D,
-                                        eta_p=eta_p_2D)
+# stationary phase results
+p_rcr, t_rcr_sta, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+                                eta, eta_p,
+                                tau_img, tau_lim, faxis, sig_FT, None, dz_iso=dz_iso)
+p_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
-axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
-rcr_amp_2D, rcr_tt_2D = rays_to_surface(ray_rcr,
-                                        axes_rcr,
-                                        dz_surf + eta_2D)
+# line source result
+kc = 2 * pi * fc / c0
+p_rcr, t_rcr_1D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+                                eta, eta_p,
+                                tau_img, tau_lim, faxis, sig_FT, kc, dz_iso=dz_iso)
+p_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
-# greens function from source
-omega_ = 2 * pi * faxis[:, None, None]
-aas_ = src_amp_2D[None, :, :]
-ara_ = rcr_amp_2D[None, :, :]
-ttas_ = src_tt_2D[None, :, :]
-ttra_ = rcr_tt_2D[None, :, :]
-
-
-ne_str = '-1j * omega_ * aas_ * exp(-1j * omega_ * ttas_) / c'
-dpdn_g_as_2D = ne.evaluate(ne_str)
-
-
-ne_str = 'ara_ * exp(-1j * omega_ * ttra_)'
-g_ra_2D = ne.evaluate(ne_str)
-
-# surface integral for pressure at receiver
-
-# 1-D geometry
-p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
-                           g_ra_line,
-                           dx,
-                           sig_FT,
-                           faxis,
-                           src_tt + rcr_tt,
-                           tau_img,
-                           tau_lim,
-                           spreading=kc,
-                           c=c)
-
-# stationary phase
-
-# compute spreading factor for stationary phase approximation
-# second derivative of (d_src + d_rcr) wrt y
-d2d = src_d2d + rcr_d2d
-
-p_rcr_sta, taxis_sta = p_sca(2 * dpdn_g_as_point,
-                             g_ra_point,
-                             dx,
-                             sig_FT,
-                             faxis,
-                             src_tt + rcr_tt,
-                             tau_img,
-                             tau_lim,
-                             spreading=d2d,
-                             c=c)
-
-# 2D integration
-p_rcr_2D, taxis_2D = p_sca(2 * dpdn_g_as_2D,
-                           g_ra_2D,
-                           dx,
-                           sig_FT,
-                           faxis,
-                           src_tt_2D + rcr_tt_2D,
-                           tau_img,
-                           tau_lim,
-                           c=c)
-
-# compute reference amplitudes
-p_ref_1D = np.sqrt(2 / (pi * omega_c * tau_img)) / 4
-p_ref_2D = 1 / (4 * pi * tau_img * c0)
-
-p_sca_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr_1D))) - 20 * np.log10(p_ref_1D)
-p_sca_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr_sta))) - 20 * np.log10(p_ref_2D)
-p_sca_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr_2D))) - 20 * np.log10(p_ref_2D)
+# 2-D result
+p_rcr, t_rcr_2D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+                                eta_2D, eta_p_2D,
+                                tau_img, tau_lim, faxis, sig_FT, yaxis, dz_iso=dz_iso)
+p_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
 fig, ax = plt.subplots()
-ax.plot((taxis_1D - tau_img) * 1e3, p_sca_dB_1D)
-ax.plot((taxis_sta - tau_img) * 1e3, p_sca_dB_sta)
-ax.plot((taxis_2D - tau_img) * 1e3, p_sca_dB_2D)
-ax.set_ylim(-80, 5)
+
+ax.plot((t_rcr_sta - tau_img) * 1e3, p_dB_sta)
+ax.plot((t_rcr_1D - tau_img) * 1e3, p_dB_1D)
+ax.plot((t_rcr_2D - tau_img) * 1e3, p_dB_2D)
+

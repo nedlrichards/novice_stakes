@@ -5,7 +5,7 @@ from scipy.optimize import newton
 from scipy.signal import hilbert
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca, nuttall_pulse
+from novice_stakes import p_sca, initialize_nuttall, initialize_axes
 
 plt.ion()
 
@@ -21,59 +21,18 @@ phi = 0.
 c = 1500
 fc = 1e3
 fs = 2.25e3 * 2
-kc = 2 * pi * fc / c
-
-decimation = 8
-dx = c / (decimation * fc)
-
-# compute time/frequency domain parameters
 tau_lim = 25e-3
 
-# transmitted signal
-sig_y, sig_t = nuttall_pulse(fc, fs)
-
-# compute t and f axes
-num_t = int(np.ceil(tau_lim * fs + sig_y.size))
-if num_t % 2: num_t += 1
-
-# flat surface specifications
-# compute FT of transmitted signal
-faxis = np.arange(num_t // 2 + 1) * fs / num_t
-sig_FT = np.fft.rfft(sig_y, num_t)
+# compute time/frequency domain parameters
+faxis, dx, sig_FT = initialize_nuttall(fc, fs, c, tau_lim)
 
 # setup xaxis
-d_img = np.sqrt(x_rcr ** 2 + (z_src + z_rcr) ** 2)
-dflat = lambda x: np.sqrt(x ** 2 + z_src ** 2) \
-                    + np.sqrt((x_rcr - x) ** 2 + z_rcr ** 2) \
-                    - (d_img + tau_lim * c)
-fudgef = 5  # necassary because we don't know surface profile
-xbounds = (newton(dflat, 0) - fudgef, newton(dflat, x_rcr) + fudgef)
+tau_src_ier = lambda rho: np.sqrt(rho ** 2 + z_src ** 2) / c
+tau_rcr_ier = lambda rho: np.sqrt(rho ** 2 + z_rcr ** 2) / c
+xaxis, yaxis, tau_img = initialize_axes(tau_src_ier, tau_rcr_ier, tau_lim, x_rcr, dx)
 
-numx = int(np.ceil((xbounds[1] - xbounds[0]) / dx)) + 1
-if numx % 2: numx += 1
-xaxis = np.arange(numx) * dx + xbounds[0]
-
-# iterative process to compute yaxis
-# x_ref is best guess for x position of travel time minimum at y_max
-x_ref = z_src * d_img / (z_rcr + z_src)
-
-for i in range(10):
-    # setup yaxis
-    dflat = lambda y: np.sqrt(x_ref ** 2 + y ** 2 + z_src ** 2) \
-                        + np.sqrt((x_rcr - x_ref) ** 2 + y ** 2 +  z_rcr ** 2) \
-                        - (d_img + tau_lim * c)
-    ymax = newton(dflat, tau_lim * c) + fudgef
-    # compute x-postion of travel time minimum at y_max
-    d_ymax = np.sqrt(xaxis ** 2 + ymax ** 2 + z_src ** 2) \
-        + np.sqrt((x_rcr - xaxis) ** 2 + ymax ** 2 + z_rcr ** 2)
-    x_nxt = xaxis[np.argmin(d_ymax)]
-    if x_ref - x_nxt == 0:
-        break
-    x_ref = x_nxt
-
-numy = int(np.ceil((2 * ymax / dx))) + 1
-if numy % 2: numy += 1
-yaxis = np.arange(numy) * dx - ymax
+numx = xaxis.size
+numy = yaxis.size
 
 # 1-D calculations
 K = 2 * pi / L
@@ -131,19 +90,18 @@ ne_str = 'exp(-2j * pi * f_ * dr_ / c) / (4 * pi * dr_)'
 g_ra_2D = ne.evaluate(ne_str)
 
 # surface integral for pressure at receiver
-tau_ref = d_img / c
 
 # 1-D geometry
+kc = 2 * pi * fc / c
 p_rcr_1D, taxis_1D = p_sca(2 * dpdn_g_as_line,
                            g_ra_line,
                            dx,
                            sig_FT,
                            faxis,
                            (d_src + d_rcr) / c,
-                           tau_ref,
+                           tau_img,
                            tau_lim,
-                           spreading=kc,
-                           c=c)
+                           spreading=kc)
 
 # stationary phase
 
@@ -157,10 +115,9 @@ p_rcr_sta, taxis_sta = p_sca(2 * dpdn_g_as_point,
                              sig_FT,
                              faxis,
                              (d_src + d_rcr) / c,
-                             tau_ref,
+                             tau_img,
                              tau_lim,
-                             spreading=d2d,
-                             c=c)
+                             spreading=d2d)
 
 # 2D integration
 p_rcr_2D, taxis_2D = p_sca(2 * dpdn_g_as_2D,
@@ -169,21 +126,20 @@ p_rcr_2D, taxis_2D = p_sca(2 * dpdn_g_as_2D,
                            sig_FT,
                            faxis,
                            (d_src_2D + d_rcr_2D) / c,
-                           tau_ref,
-                           tau_lim,
-                           c=c)
+                           tau_img,
+                           tau_lim)
 
 # compute reference amplitudes
-p_ref_1D = np.sqrt(2 / (pi * kc * d_img)) / 4
-p_ref_2D = 1 / (4 * pi * d_img)
+p_ref_1D = np.sqrt(2 / (pi * kc * tau_img * c)) / 4
+p_ref_2D = 1 / (4 * pi * tau_img * c)
 
 p_sca_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr_1D))) - 20 * np.log10(p_ref_1D)
 p_sca_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr_sta))) - 20 * np.log10(p_ref_2D)
 p_sca_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr_2D))) - 20 * np.log10(p_ref_2D)
 
 fig, ax = plt.subplots()
-ax.plot((taxis_1D - tau_ref) * 1e3, p_sca_dB_1D)
-ax.plot((taxis_sta - tau_ref) * 1e3, p_sca_dB_sta)
-ax.plot((taxis_2D - tau_ref) * 1e3, p_sca_dB_2D)
+ax.plot((taxis_1D - tau_img) * 1e3, p_sca_dB_1D)
+ax.plot((taxis_sta - tau_img) * 1e3, p_sca_dB_sta)
+ax.plot((taxis_2D - tau_img) * 1e3, p_sca_dB_2D)
 
 ax.set_ylim(-80, 5)

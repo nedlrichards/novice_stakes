@@ -30,6 +30,8 @@ class Surface:
 
         elif self.spectrum.size == self.spectrum.shape[0]:
             self.N = (self.spectrum.shape[0] - 1) * 2
+            self.Nx = None
+            self.Ny = None
             self.kx = np.arange(self.N // 2 + 1) * kmax / self.N
             self.ky = None
             self.xaxis = np.arange(self.N) * self.dx
@@ -37,11 +39,13 @@ class Surface:
             self.omega = self.ldis_deepwater(self.kx)
             self.h_rms = np.sqrt(np.sum(self.spectrum) * kmax / self.N)
         else:
-            self.N = self.spectrum.shape[1]
-            self.kx = np.arange(self.N // 2 + 1) * kmax / self.N
-            self.ky = (np.arange(self.N) - self.N // 2) * kmax / self.N
-            self.xaxis = np.arange(self.N) * self.dx
-            self.yaxis = (np.arange(self.N) - self.N // 2) * self.dx
+            self.N = None
+            Nx, self.Ny = self.spectrum.shape
+            self.Nx = (Nx - 1) * 2
+            self.kx = np.arange(self.Nx // 2 + 1) * kmax / self.Nx
+            self.ky = (np.arange(self.Ny) - self.Ny // 2) * kmax / self.Ny
+            self.xaxis = np.arange(self.Nx) * self.dx
+            self.yaxis = (np.arange(self.Ny) - (self.Ny // 2 - 1)) * self.dx
             k = np.sqrt(self.kx[:, None] ** 2 + self.ky[None, :] ** 2)
             self.omega = self.ldis_deepwater(k)
             self.h_ms = np.sum(self.spectrum)
@@ -67,7 +71,7 @@ class Surface:
 
         # 2-D wave field
         samps = samps.reshape(self.spectrum.shape)
-        abs_k2 = self.spectrum * (self.N * self.kmax) ** 2
+        abs_k2 = self.spectrum * self.Nx * self.Ny * self.kmax ** 2
         realization = np.sqrt(abs_k2) * samps
         return realization
 

@@ -49,6 +49,7 @@ def directional_spectrum(delta, bearing, k_grid, omni_spectrum):
     d_spec = omni_spectrum * spreading / k_grid
 
     d_spec[np.isnan(d_spec)] = 0
+    d_spec[np.isinf(d_spec)] = 0
     return d_spec
 
 # directional spectrum formulations

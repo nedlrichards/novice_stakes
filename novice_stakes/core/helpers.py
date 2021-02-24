@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import newton
-from novice_stakes import nuttall_pulse
+from .pulse_signal import nuttall_pulse
 
 def initialize_nuttall(fc, fs, c_surf, tau_lim, decimation=8, num_dither=5):
     """

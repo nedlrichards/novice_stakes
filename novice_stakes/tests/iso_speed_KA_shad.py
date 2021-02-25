@@ -12,14 +12,14 @@ from novice_stakes.refraction import IsoSpeedFan
 
 plt.ion()
 
-z_src = -105
-z_rcr = -15
+z_src = -30
+z_rcr = -30
 dz_iso = 2
 x_rcr = 460
 
 fc = 1e3
 fs = 2.25e3 * 2
-tau_lim = 25e-3
+tau_lim = 30e-3
 
 # sinusoid parameters
 H = 2
@@ -47,32 +47,19 @@ xaxis, yaxis, tau_img = initialize_axes(tau_src_ier, tau_rcr_ier, tau_lim, x_rcr
 eta = (H / 2) * np.cos(K * xaxis + Phi)
 eta_p = -(H * K / 2) * np.sin(K * xaxis + Phi)
 
-# 2-D profile
-eta_2D = np.broadcast_to(eta[:, None], (xaxis.size, yaxis.size))
-eta_p_2D = np.broadcast_to(eta_p[:, None],(xaxis.size,  yaxis.size))
-eta_p_2D = np.array([eta_p_2D, np.zeros_like(eta_p_2D)])
-
 # stationary phase results
 p_rcr, t_rcr_sta, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, None, dz_iso=dz_iso)
 p_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
-# line source result
-kc = 2 * pi * fc / c0
-p_rcr, t_rcr_1D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+# shadowed result
+p_rcr, t_rcr_sha, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
-                                tau_img, tau_lim, faxis, sig_FT, kc, dz_iso=dz_iso)
-p_dB_1D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
-
-# 2-D result
-p_rcr, t_rcr_2D, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
-                                eta_2D, eta_p_2D,
-                                tau_img, tau_lim, faxis, sig_FT, yaxis, dz_iso=dz_iso)
-p_dB_2D = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
+                                tau_img, tau_lim, faxis, sig_FT, None,
+                                dz_iso=dz_iso, shadow=True)
+p_dB_sha = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
 fig, ax = plt.subplots()
-
 ax.plot((t_rcr_sta - tau_img) * 1e3, p_dB_sta)
-ax.plot((t_rcr_1D - tau_img) * 1e3, p_dB_1D)
-ax.plot((t_rcr_2D - tau_img) * 1e3, p_dB_2D)
+ax.plot((t_rcr_sha - tau_img) * 1e3, p_dB_sha)

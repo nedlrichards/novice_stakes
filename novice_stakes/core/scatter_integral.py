@@ -55,7 +55,8 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
     return p_sca, taxis
 
 def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
-              tau_img, tau_lim, faxis, sig_FT, spreading, dz_iso=0):
+              tau_img, tau_lim, faxis, sig_FT, spreading, dz_iso=0,
+              shadow=False):
 
     dx = (xaxis[-1] - xaxis[0]) / (xaxis.size - 1)
     omega = 2 * pi * faxis[:, None]
@@ -67,10 +68,12 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
         src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
                                                    xaxis,
                                                    dz_iso + eta,
-                                                   eta_p=eta_p)
+                                                   eta_p=eta_p,
+                                                   shadow=shadow)
         rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
-                                                   np.abs(x_rcr - xaxis),
-                                                   dz_iso + eta)
+                                                   x_rcr - xaxis,
+                                                   dz_iso + eta,
+                                                   shadow=shadow)
 
         # greens function from source
         dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
@@ -87,15 +90,17 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
         # line source spreading
         kc = float(spreading)
         src_amp, src_tt = rays_to_surface(ray_src,
-                                        xaxis,
-                                        dz_iso + eta,
-                                        eta_p=eta_p,
-                                        kc=kc)
+                                          xaxis,
+                                          dz_iso + eta,
+                                          eta_p=eta_p,
+                                          kc=kc,
+                                          shadow=shadow)
 
         rcr_amp, rcr_tt = rays_to_surface(ray_rcr,
-                                        np.abs(x_rcr - xaxis),
-                                        dz_iso + eta,
-                                        kc=kc)
+                                          x_rcr - xaxis,
+                                          dz_iso + eta,
+                                          kc=kc,
+                                          shadow=shadow)
         # greens function from source
         dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
         # greens function to receiver
@@ -108,7 +113,7 @@ def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
         spreading = None
         # initialize 2D axes
         axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
-        axes_rcr = np.array(np.meshgrid(np.abs(x_rcr - xaxis), yaxis, indexing='ij'))
+        axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
 
         src_amp, src_tt = rays_to_surface(ray_src,
                                           axes_src,

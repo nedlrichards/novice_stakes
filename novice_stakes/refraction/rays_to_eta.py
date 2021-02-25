@@ -2,7 +2,7 @@ import numpy as np
 from math import pi
 from scipy.interpolate import interp1d, UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None):
+def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None, shadow=False):
     """extrapolate from rays at z=0 to rays at z=eta"""
 
     axes = np.asarray(axes)
@@ -71,6 +71,11 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None):
         mag_proj = np.einsum(proj_str, proj_vec, n)
         amp *= mag_proj
 
+    # shadow correction possible for 1-D surfaces
+    if shadow and np.ndim(axes) == 1:
+        shadow_i = _shadow(rho, d_rho)
+        amp[shadow_i] = 0.
+
     if kc is None:
         #use chain rule to estimate second derivative of tau wrt y
         if np.ndim(axes) == 1:
@@ -82,3 +87,36 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None):
             return amp, travel_time, d2d
 
     return amp, travel_time
+
+def _shadow(rho, d_rho):
+    """Remove ray shadows by require monotonic rho"""
+    # check for an axis where rho moves past x_src =0
+    grad_sign = np.sign(np.diff(rho))
+    grad_sign = np.hstack([grad_sign[0], grad_sign])
+    neg_grad_i = grad_sign < 0
+    pos_grad_i = grad_sign >= 0
+    neg_grad_start = np.argmax(neg_grad_i)
+    pos_grad_start = np.argmax(pos_grad_i)
+
+    # return non-shadowed points expecting a monotonic decrease in rho
+    if np.any(neg_grad_i):
+        neg_values = (rho + d_rho)[neg_grad_i]
+        mono_values = np.maximum.accumulate(neg_values[::-1])
+        _, no_shad_neg = np.unique(mono_values, return_index=True)
+        #undo index flip
+        no_shad_neg = neg_values.size - 1 - no_shad_neg
+        no_shad_neg += neg_grad_start
+    if np.any(pos_grad_i):
+        mono_values = np.maximum.accumulate((rho + d_rho)[pos_grad_i])
+        _, no_shad_pos = np.unique(mono_values, return_index=True)
+        no_shad_pos += pos_grad_start
+
+    if np.any(neg_grad_i) and np.any(pos_grad_i):
+        all_i = np.hstack([no_shad_pos, no_shad_neg])
+    elif np.any(neg_grad_i):
+        all_i = no_shad_neg
+    else:
+        all_i = no_shad_pos
+    shad_ind = np.ones(rho.size, dtype=np.bool)
+    shad_ind[all_i] = False
+    return shad_ind

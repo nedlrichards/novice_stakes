@@ -31,7 +31,7 @@ def initialize_axes(tau_src, tau_rcr, tau_lim, x_rcr, dx, fudgef=5):
     Use flat surface delay to initialize the x&y axes with delays past tau_lim
     """
 
-    tau_flat = lambda x: tau_src(x) + tau_rcr(np.abs(x_rcr - x))
+    tau_flat = lambda x: tau_src(abs(x)) + tau_rcr(np.abs(x_rcr - x))
 
     x_test = np.arange(np.ceil(x_rcr * 1.2 / dx)) * dx
     tau_total = tau_flat(x_test)

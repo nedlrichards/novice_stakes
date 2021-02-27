@@ -13,6 +13,8 @@ def lorentzian(kaxis, rms_height, correlation_length):
     s_lor = ms * kappa \
           / (pi * (kaxis ** 2 + kappa ** 2))
 
+    s_lor[1:] *= 2
+
     return s_lor
 
 

@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca_fan, initialize_nuttall, initialize_axes
+from novice_stakes import p_sca_KA_fan, initialize_nuttall, initialize_axes
 from novice_stakes.refraction import CLinearFan
 
 plt.ion()
@@ -56,21 +56,21 @@ eta_p_2D = np.array([eta_p_2D, np.zeros_like(eta_p_2D)])
 fig, ax = plt.subplots()
 
 # stationary phase results
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
+p_rcr, t_rcr, p_ref = p_sca_KA_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, None, dz_iso=dz_iso)
 p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 ax.plot((t_rcr - tau_img) * 1e3, p_dB)
 
 # line source result
 kc = 2 * pi * fc / c0
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr, p_ref = p_sca_KA_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, kc, dz_iso=dz_iso)
 p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 ax.plot((t_rcr - tau_img) * 1e3, p_dB)
 
 # 2-D result
-p_rcr, t_rcr, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr, p_ref = p_sca_KA_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta_2D, eta_p_2D,
                                 tau_img, tau_lim, faxis, sig_FT, yaxis, dz_iso=dz_iso)
 p_dB = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)

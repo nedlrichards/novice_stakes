@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca_fan, initialize_nuttall, initialize_axes
+from novice_stakes import p_sca_KA_fan, initialize_nuttall, initialize_axes
 from novice_stakes.refraction import IsoSpeedFan
 
 plt.ion()
@@ -48,13 +48,13 @@ eta = (H / 2) * np.cos(K * xaxis + Phi)
 eta_p = -(H * K / 2) * np.sin(K * xaxis + Phi)
 
 # stationary phase results
-p_rcr, t_rcr_sta, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr_sta, p_ref = p_sca_KA_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, None, dz_iso=dz_iso)
 p_dB_sta = 20 * np.log10(np.abs(hilbert(p_rcr))) - 20 * np.log10(p_ref)
 
 # shadowed result
-p_rcr, t_rcr_sha, p_ref = p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr,
+p_rcr, t_rcr_sha, p_ref = p_sca_KA_fan(ray_src, ray_rcr, xaxis, x_rcr,
                                 eta, eta_p,
                                 tau_img, tau_lim, faxis, sig_FT, None,
                                 dz_iso=dz_iso, shadow=True)

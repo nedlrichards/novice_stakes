@@ -1,52 +1,121 @@
 import numpy as np
+import numexpr as ne
 from math import pi
-from scipy.interpolate import interp1d, UnivariateSpline
+from scipy.interpolate import UnivariateSpline
 
-def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None, shadow=False):
-    """extrapolate from rays at z=0 to rays at z=eta"""
+def greens_FS_fan(ray_fan, rho, eta, faxis,
+                  phi=None, eta_p=None, dz_iso=0, isline=False, shadow=False):
+    """Compute scatter pressure with the KA, using ray fans"""
 
-    axes = np.asarray(axes)
+    c_surf = ray_fan.c0
 
-    if np.ndim(axes) == 3:
-        rho = np.linalg.norm(axes, axis=0)
-        phi = np.arctan2(axes[1], axes[0])
-    elif np.ndim(axes) == 2 or np.ndim(axes) > 3:
-        raise(ValueError('axes ndmin must be 1 or 3 (axis_num, x, y)'))
+    # 2-D calculations
+    if rho.ndim == 2:
+        # broadcast specifications
+        xi = (np.newaxis, slice(rho.shape[0]), slice(rho.shape[1]))
+        oi = (slice(faxis.size), np.newaxis, np.newaxis)
+    # 1-D calculation
     else:
-        rho = np.abs(axes)
+        # broadcast specifications
+        xi = (np.newaxis, slice(rho.size))
+        oi = (slice(faxis.size), np.newaxis)
 
-    if eta_p is not None:
-        eta_p = np.asarray(eta_p)
-        if np.ndim(axes) == 3:
-            n = np.array([-eta_p[0], -eta_p[1], np.ones_like(eta_p[0])])
-        elif np.ndim(axes) == 2 or np.ndim(axes) > 3:
-            raise(ValueError('eta ndmins must be 1 or 3 (axis_num, x, y)'))
+    if not isline:
+        if phi is None:
+            tt, amp, d2d = extrapolate_fan(ray_fan, rho, eta, dz_iso,
+                                        return_d2d=True, eta_p=eta_p)
         else:
-            n = np.array([-eta_p, np.ones_like(eta_p)])
+            tt, amp = extrapolate_fan(ray_fan, rho, eta, dz_iso,
+                                      phi=phi, eta_p=eta_p)
+            d2d = None
 
+    else:
+        kaxis = 2 * pi * faxis / c_surf
+        tt, amp = extrapolate_fan(ray_fan, rho, eta, dz_iso,
+                                  kaxis=kaxis, return_d2d=False,
+                                  eta_p=eta_p, phi=phi)
+        d2d = None
+
+    # shadow correction possible for 1-D surfaces
+    if shadow and np.ndim(axes) == 1:
+        shadow_i = _shadow(rho, d_rho)
+        if not isline:
+            amp[shadow_i] = 0.
+        else:
+            amp[:, shadow_i] = 0.
+
+    # setup array broadcasting
+    omega_ = 2 * pi * faxis[oi]
+    if not isline:
+        amp_ = amp[xi]
+    else:
+        amp_= amp
+
+    tt_ = tt[xi]
+
+    # greens function from source
+    if eta_p is None:
+        g_str = 'amp_ * exp(-1j * omega_ * tt_)'
+    else:
+        g_str = '-1j * omega_ * amp_ * exp(-1j * omega_ * tt_) / c_surf'
+    greens = ne.evaluate(g_str)
+
+    return greens, tt, d2d
+
+def extrapolate_fan(ray_fan, rho, eta, dz_iso,
+                    kaxis=None, return_d2d=False, eta_p=None, phi=None):
+    """
+    Extrapolate a ray from the start of the iso-speed layer to the surface
+    """
+    # move from z=0 to eta
     # relate surface position to incident angle
-    px_ier = interp1d(ray_fan.rho, ray_fan.px, kind=3,
-                      bounds_error=False, fill_value=np.nan)
-    px_n = px_ier(rho)
-    cos_n = px_n * ray_fan.c0
-    sin_n = np.sqrt(1 - cos_n ** 2)
-    d_rho = -eta * cos_n / sin_n
+    px_ier = UnivariateSpline(ray_fan.rho, ray_fan.px, k=3, ext=2, s=0)
+    eta_ = eta + dz_iso
 
-    props = np.array([ray_fan.travel_time, ray_fan.q])
-    ray_ier = interp1d(ray_fan.rho, props, kind=3,
-                       bounds_error=False, fill_value=np.nan)
-    rays = ray_ier(rho + d_rho)
+    # iterate untill rays intersect the surface at rho
+    rho_at_dz = rho.copy()
+
+    def ray_to_surf(rho_dz):
+        """extrapolate to surface using plane wave assumption"""
+        px_0 = px_ier(rho_dz)
+        cos_0 = px_0 * ray_fan.c0
+        sin_0 = np.sqrt(1 - cos_0 ** 2)
+        # total distance in iso-speed layer
+        d_r = eta_ / sin_0
+        # horizontal distance in iso-speed layer
+        d_rho = d_r * cos_0
+        return d_rho, d_r
+
+    #TODO: this can be improved with newtons method
+    d_rho, d_r = ray_to_surf(rho)
+    rho_dz = rho - d_rho
+
+    for i in range(10):
+        # iterate to find correct range at z=0 to hit z=eta
+        d_rho, d_r = ray_to_surf(rho_dz)
+        # estimate derivative of d_rho
+        error = np.max(np.abs(rho - (rho_dz + d_rho)))
+        rho_dz = rho - d_rho
+
+        if error < 0.1:
+            break
+
+    px_n = px_ier(rho_dz)
+
+    tt_ier = UnivariateSpline(ray_fan.rho, ray_fan.travel_time, k=3, ext=2, s=0)
+    q_ier = UnivariateSpline(ray_fan.rho, ray_fan.q, k=3, ext=2, s=0)
 
     # adjust travel time and amplitude for extra distance
-    r_surf = np.sqrt(eta ** 2 + d_rho ** 2)
-    travel_time = rays[0] + r_surf / ray_fan.c0
+    travel_time = tt_ier(rho_dz) + d_r / ray_fan.c0
 
-    q = rays[1] + ray_fan.c0 * r_surf / ray_fan.c_src
-
-    if np.ndim(axes) == 1 and kc is not None:
+    # compute amplitude
+    # dynamic ray tracing variable q from COA ch. 3
+    q = q_ier(rho_dz) + ray_fan.c0 * d_r / ray_fan.c_src
+    if kaxis is not None:
         # line source dynamic ray amplitude
-        amp = np.sqrt(np.abs(ray_fan.c0 / (ray_fan.c_src * q))) + 0j
-        amp *= np.exp(3j * pi / 4) / np.sqrt(8 * pi * kc)
+        amp = np.sqrt(np.abs(ray_fan.c0 / (ray_fan.c_src * q))) \
+            * np.exp(3j * pi / 4) / np.sqrt(8 * pi * kaxis[:, None])
+        amp[kaxis == 0, :] = 0. + 0.j
     else:
         # point source dynamic ray amplitude, COA (3.65)
         amp = np.sqrt(np.abs(px_n * ray_fan.c0 / (rho * q)))
@@ -54,16 +123,21 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None, shadow=False):
 
     # compute ray normal derivative projection vector
     if eta_p is not None:
+        # compute surface normal vector
+        # 2D surface requires first dimension of eta_p array to be dx, dy
+        if phi is not None:
+            n = np.array([-eta_p[0], -eta_p[1], np.ones_like(eta_p[0])])
+        else:
+            n = np.array([-eta_p, np.ones_like(eta_p)])
+
         cos_theta = px_n * ray_fan.c0
         sin_theta = np.sqrt(1 - cos_theta ** 2)
 
-        if np.ndim(eta_p) == 3:
+        if phi is not None:
             proj_vec = np.array([np.cos(phi) * cos_theta,
                                  np.sin(phi) * cos_theta,
                                  sin_theta])
             proj_str = 'ijk,ijk->jk'
-        elif np.ndim(eta_p) == 2:
-            raise(ValueError('eta_p can only have 3 or 1 dimensions'))
         else:
             proj_vec = np.array([cos_theta, sin_theta])
             proj_str = 'ij,ij->j'
@@ -71,22 +145,20 @@ def rays_to_surface(ray_fan, axes, eta, eta_p=None, kc=None, shadow=False):
         mag_proj = np.einsum(proj_str, proj_vec, n)
         amp *= mag_proj
 
-    # shadow correction possible for 1-D surfaces
-    if shadow and np.ndim(axes) == 1:
-        shadow_i = _shadow(rho, d_rho)
-        amp[shadow_i] = 0.
+    if np.any(np.isnan(amp)):
+        raise(ValueError('nans detected in amplitude output'))
 
-    if kc is None:
-        #use chain rule to estimate second derivative of tau wrt y
-        if np.ndim(axes) == 1:
-            tt_ier = UnivariateSpline(ray_fan.rho,
-                                      ray_fan.travel_time,
-                                      k=3, s=0)
-            d_tau_d_rho = tt_ier.derivative()
-            d2d = d_tau_d_rho(rho) / rho
-            return amp, travel_time, d2d
+    if return_d2d:
+        d_tau_d_rho = tt_ier.derivative()
+        # TODO: adjust for spreading in iso-speed layer
+        #d2d_spread = -d_rho / d_r
+        #d2d_spread[np.isnan(d2d_spread)] = 0
+        d2d_spread = 0
 
-    return amp, travel_time
+        d2d = (d_tau_d_rho(rho_dz) + d2d_spread) / rho
+        return travel_time, amp, d2d
+    else:
+        return travel_time, amp
 
 def _shadow(rho, d_rho):
     """Remove ray shadows by require monotonic rho"""

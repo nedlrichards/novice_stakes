@@ -1,7 +1,6 @@
 import numpy as np
 import numexpr as ne
 from math import pi
-from novice_stakes.refraction import rays_to_surface
 
 def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
           max_duration, spreading=None):
@@ -33,12 +32,16 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
     elif spreading.size == dpdn_g_as.shape[-1]:
         # point source, calculated with stationary phase at y=0
         igrand_scale = dx
-        s_term_ = np.sqrt(1 / (faxis[:, None] * spreading[None, tau_i])) \
-                  * np.exp(-1j * pi / 4)
+        denom = faxis[:, None] * spreading[None, tau_i]
+        denom[faxis==0, :] = 1.
+        s_term_ = np.sqrt(1 / denom) * np.exp(-1j * pi / 4)
+        s_term_[faxis==0, :] = 0. + 0.j
 
     elif spreading.size == 1:
         # line source
-        igrand_scale = dx
+        # TODO: clairify why the negative sign is necassary to match image
+        # solution, see mathematica nb example
+        igrand_scale = -dx
         kc = spreading[0]
     else:
         raise(ValueError('Spreading specification can be either point or line'))
@@ -53,99 +56,3 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
     taxis = np.arange(p_sca.size) / (2 * (faxis.size - 1) * df) + tau_reference
 
     return p_sca, taxis
-
-def p_sca_fan(ray_src, ray_rcr, xaxis, x_rcr, eta, eta_p,
-              tau_img, tau_lim, faxis, sig_FT, spreading, dz_iso=0,
-              shadow=False):
-
-    dx = (xaxis[-1] - xaxis[0]) / (xaxis.size - 1)
-    omega = 2 * pi * faxis[:, None]
-    c_surf = ray_src.c0
-
-    if spreading is None:
-        # stationary phase for y-integral
-        isline = False
-        src_amp, src_tt, src_d2d = rays_to_surface(ray_src,
-                                                   xaxis,
-                                                   dz_iso + eta,
-                                                   eta_p=eta_p,
-                                                   shadow=shadow)
-        rcr_amp, rcr_tt, rcr_d2d = rays_to_surface(ray_rcr,
-                                                   x_rcr - xaxis,
-                                                   dz_iso + eta,
-                                                   shadow=shadow)
-
-        # greens function from source
-        dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
-        # greens function to receiver
-        g_ra = rcr_amp * np.exp(-1j * omega * rcr_tt)
-
-        # compute spreading factor for stationary phase approximation
-        # second derivative of (d_src + d_rcr) wrt y
-        spreading = src_d2d + rcr_d2d
-
-
-    elif np.array(spreading).size == 1:
-        isline = True
-        # line source spreading
-        kc = float(spreading)
-        src_amp, src_tt = rays_to_surface(ray_src,
-                                          xaxis,
-                                          dz_iso + eta,
-                                          eta_p=eta_p,
-                                          kc=kc,
-                                          shadow=shadow)
-
-        rcr_amp, rcr_tt = rays_to_surface(ray_rcr,
-                                          x_rcr - xaxis,
-                                          dz_iso + eta,
-                                          kc=kc,
-                                          shadow=shadow)
-        # greens function from source
-        dpdn_g_as = -1j * omega * src_amp * np.exp(-1j * omega * src_tt) / c_surf
-        # greens function to receiver
-        g_ra = rcr_amp * np.exp(-1j * omega * rcr_tt)
-
-    elif spreading.size > 1:
-        # 2-D calculations
-        isline = False
-        yaxis = spreading.copy()
-        spreading = None
-        # initialize 2D axes
-        axes_src = np.array(np.meshgrid(xaxis, yaxis, indexing='ij'))
-        axes_rcr = np.array(np.meshgrid(x_rcr - xaxis, yaxis, indexing='ij'))
-
-        src_amp, src_tt = rays_to_surface(ray_src,
-                                          axes_src,
-                                          dz_iso + eta,
-                                          eta_p=eta_p)
-
-        rcr_amp, rcr_tt = rays_to_surface(ray_rcr,
-                                          axes_rcr,
-                                          dz_iso + eta)
-
-        # greens function from source
-        omega_ = 2 * pi * faxis[:, None, None]
-        aas_ = src_amp[None, :, :]
-        ara_ = rcr_amp[None, :, :]
-        ttas_ = src_tt[None, :, :]
-        ttra_ = rcr_tt[None, :, :]
-
-        ne_str = '-1j * omega_ * aas_ * exp(-1j * omega_ * ttas_) / c_surf'
-        dpdn_g_as = ne.evaluate(ne_str)
-
-        ne_str = 'ara_ * exp(-1j * omega_ * ttra_)'
-        g_ra = ne.evaluate(ne_str)
-
-    # surface integral for pressure at receiver
-    p_rcr, taxis = p_sca(2 * dpdn_g_as, g_ra, dx, sig_FT, faxis,
-                         src_tt + rcr_tt, tau_img, tau_lim,
-                         spreading=spreading)
-
-    # pressure refence based on source type
-    if isline:
-        p_ref = np.sqrt(2 / (pi * kc * c_surf * tau_img)) / 4
-    else:
-        p_ref = 1 / (4 * pi * tau_img * c_surf)
-
-    return p_rcr, taxis, p_ref

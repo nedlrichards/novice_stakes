@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-from novice_stakes import p_sca_fan, initialize_nuttall, initialize_axes
+from novice_stakes import p_sca_KA_fan, initialize_nuttall, initialize_axes
 from novice_stakes.refraction import IsoSpeedFan
 
 plt.ion()

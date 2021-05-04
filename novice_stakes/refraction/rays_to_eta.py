@@ -84,23 +84,21 @@ def extrapolate_fan(ray_fan, rho, eta, dz_iso,
         d_r = eta_ / sin_0
         # horizontal distance in iso-speed layer
         d_rho = d_r * cos_0
-        return d_rho, d_r
+        return px_0, d_rho, d_r
 
-    #TODO: this can be improved with newtons method
-    d_rho, d_r = ray_to_surf(rho)
-    rho_dz = rho - d_rho
-
-    for i in range(10):
-        # iterate to find correct range at z=0 to hit z=eta
-        d_rho, d_r = ray_to_surf(rho_dz)
-        # estimate derivative of d_rho
-        error = np.max(np.abs(rho - (rho_dz + d_rho)))
-        rho_dz = rho - d_rho
-
-        if error < 0.1:
-            break
-
-    px_n = px_ier(rho_dz)
+    # One iteration of newton's method to estimate path through the iso-speed
+    # layer
+    if np.abs(dz_iso) > 1e-3:
+        _, d_rho0, _ = ray_to_surf(rho)
+        _, d_rho1, _ = ray_to_surf(rho - d_rho0)
+        dd_rho = (d_rho1 - d_rho0) / d_rho0
+        rho_dz = rho / (1 - dd_rho)
+        px, d_rho, d_r = ray_to_surf(rho_dz)
+    else:
+        rho_dz = rho
+        px = px_ier(rho)
+        d_rho = 0
+        d_r = 0
 
     tt_ier = UnivariateSpline(ray_fan.rho, ray_fan.travel_time, k=3, ext=2, s=0)
     q_ier = UnivariateSpline(ray_fan.rho, ray_fan.q, k=3, ext=2, s=0)
@@ -118,7 +116,7 @@ def extrapolate_fan(ray_fan, rho, eta, dz_iso,
         amp[kaxis == 0, :] = 0. + 0.j
     else:
         # point source dynamic ray amplitude, COA (3.65)
-        amp = np.sqrt(np.abs(px_n * ray_fan.c0 / (rho * q)))
+        amp = np.sqrt(np.abs(px * ray_fan.c0 / (rho * q)))
         amp /= 4 * pi
 
     # compute ray normal derivative projection vector
@@ -130,7 +128,7 @@ def extrapolate_fan(ray_fan, rho, eta, dz_iso,
         else:
             n = np.array([-eta_p, np.ones_like(eta_p)])
 
-        cos_theta = px_n * ray_fan.c0
+        cos_theta = px * ray_fan.c0
         sin_theta = np.sqrt(1 - cos_theta ** 2)
 
         if phi is not None:

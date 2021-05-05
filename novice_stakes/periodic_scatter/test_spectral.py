@@ -2,7 +2,7 @@ import numpy as np
 from math import pi
 from scipy.special import hankel1
 import matplotlib.pyplot as plt
-from spectral import G_spec, G_spec_Kummar, G_Ewald
+from spectral import G_spec, G_spec_Kummar, G_dz0
 
 plt.ion()
 
@@ -24,8 +24,22 @@ dz = rrcr[1] - rsrc[1]
 alpha_0 = kc * np.cos(theta_inc)
 
 ref = G_spec_Kummar(kc * L, alpha_0 * L, dx / L, dz / L, 10000)
-print(ref)
-print(G_Ewald(L, kc, theta_inc, dx, dz, 5, 5, a=2))
+
+# test of dz0
+dx_tmp = 7.
+test1_dz0 = G_dz0(kc * L, alpha_0 * L, dx_tmp / L, 10000, 20)
+test2_dz0 = G_spec_Kummar(kc * L, alpha_0 * L, dx_tmp / L, 0, 10000)
+
+n_test = [10., 25., 50., 100., 250., 500., 750., 1000., 2000., 3000., 4000., 5000.]
+G_1 = []
+G_2 = []
+for n in n_test:
+    G_1.append(G_dz0(kc * L, alpha_0 * L, dx_tmp / L, n, 10))
+    G_2.append(G_spec_Kummar(kc * L, alpha_0 * L, dx_tmp / L, 0, n))
+
+fig, ax = plt.subplots()
+ax.semilogy(n_test, np.abs(G_1 - test2_dz0))
+ax.semilogy(n_test, np.abs(G_2 - test2_dz0))
 
 1/0
 

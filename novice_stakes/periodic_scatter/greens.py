@@ -74,42 +74,49 @@ def G_spec(kcL, alpha_0L, rs_L, num_eva, n_L=None):
                       #/ (2 * pi * abs(ms))) \
                       #* (1 - alpha_0L / (2 * pi * ms) + kcL ** 2 * adz / (4 * pi * abs(ms)))""")
 
-    G_0 = np.exp(-gamma_0L * adz + 1j * alpha_0L * dx) / gamma_0L
+    G0th = np.exp(-gamma_0L * adz + 1j * alpha_0L * dx) / gamma_0L
 
-    u_m = evaluate("""(exp(-(2 * pi * abs(ms) + sign_ms * alpha_0L) * adz)
-                      / (2 * pi * abs(ms)))""")
+    u_m = evaluate("""(exp(-(2 * pi * abs(ms) + sign_ms * alpha_0L) * adz
+                           + 1j * alpha_mL * dx) / (2 * pi * abs(ms)))""")
 
-    G_n = evaluate("exp(-gamma_mL * adz) * exp(2j * pi * ms * dx) / gamma_mL")
+    G_n = evaluate("exp(-gamma_mL * adz + 1j * alpha_mL * dx) / gamma_mL")
 
     # asymptotics of spectral sum
     dx = dx[:, :, 0]
     adz = adz[:, :, 0]
 
-    Z = adz + 1j * dx
-    Zc = np.conj(Z)
-    argZ = evaluate("exp(-2 * pi * Z)") + np.spacing(1)
+    argZ = evaluate("exp(-2 * pi * (adz + 1j * dx))") + np.spacing(1)
     argZc = np.conj(argZ)
 
+    S1 = evaluate("exp(-alpha_0L * adz) * log(1 - argZc) / (2 * pi)")
+    S2 = evaluate("exp(alpha_0L * adz) * log(1 - argZ) / (2 * pi)")
+
     if n_L is not None:
-        g_vec = np.array([1j * alpha_0L, -np.sign(dz) * gamma_0L])
-        G_0 = np.einsum('ik,ijk,jk->jk', n_L, g_vec, G_0)
+        g_vec = np.array([np.full_like(dz, 1j * alpha_0L), -np.sign(dz) * gamma_0L])
+        G0th = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, G0th)
         g_vec = np.array([np.full(dz.shape, 1j) * alpha_mL, -np.sign(dz) * gamma_mL])
         G_n = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, G_n)
         g_vec[1] = -(2 * pi * np.abs(ms) + np.sign(ms) * alpha_0L)
         u_m = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, u_m)
 
         # Compute normal derivative
-        Sd1 = evaluate("-argZc * exp(-alpha_0L * adz) / (1 - argZc)")
-        Sd1y = evaluate("alpha_0L * exp(-alpha_0L * adz) * log(1 - argZc) / (2 * pi)")
+        dz = dz[:, :, 0]
+        s1_g = np.array([np.full_like(argZc, -1j), np.sign(dz)]) \
+            * argZc * np.exp(-alpha_0L * adz) / (1 - argZc)
+        s1_g[1] -= np.sign(dz) * alpha_0L * S1
 
-        Sd2 = evaluate("-argZ * exp(alpha_0L * adz) / (1 - argZ)")
-        Sd2y = evaluate("-alpha_0L * exp(alpha_0L * adz) * log(1 - argZ) / (2 * pi)")
+        s2_g = np.array([np.full_like(argZ, 1j), np.sign(dz)]) \
+            * argZ * np.exp(alpha_0L * adz) / (1 - argZ)
+        s2_g[1] += np.sign(dz) * alpha_0L * S2
 
-        g_vec = np.array([Sd1 + Sd2, -1j * Sd1 + Sd1y + 1j * Sd2 + Sd2y])
-        S = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec)
+        s_phase = evaluate("exp(1j * alpha_0L * dx)")
+
+        s1_g[0] = 1j * alpha_0L * s_phase * S1 + s_phase * s1_g[0]
+        s2_g[0] = 1j * alpha_0L * s_phase * S2 + s_phase * s2_g[0]
+
+        S = np.einsum('ik,ijk->jk', n_L, s1_g + s2_g)
 
     else:
-        G1 = evaluate("(G_n - u_m) * exp(1j * alpha_mL * dx)").sum(axis=-1)
 
         # formulation requiring polylog of order 2
         #v_poly = np.vectorize(lambda *a: complex(fp.polylog(*a)))
@@ -120,10 +127,10 @@ def G_spec(kcL, alpha_0L, rs_L, num_eva, n_L=None):
             #+ evaluate("2 * alpha_0L + kcL ** 2 * adz") \
             #* v_poly(2, argZ) / (8 * pi ** 2))
 
-        S = evaluate("-exp(-alpha_0L * adz) * log(1 - argZc) / (2 * pi) \
-                    - exp(alpha_0L * adz) * log(1 - argZ) / (2 * pi)")
+        S = (S1 + S2) * evaluate("exp(1j * alpha_0L * dx)")
 
-    G = (G0 + S * evaluate("exp(1j * alpha_0L * dx) / 2") + G1) / 2
+    G_rem = (G_n - u_m).sum(axis=-1)
+    G = (G0th - S + G_rem) / 2
     G[np.diag_indices_from(G)] = 0. + 0.j
     return G
 

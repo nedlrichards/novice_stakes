@@ -26,8 +26,8 @@ dx = (xaxis[-1] - xaxis[0]) / (xaxis.size - 1)
 z = H * np.cos(K * xaxis) / 2
 
 # choose two specific points from the xaxis
-i1 = np.argmin(np.abs(3. - xaxis))
-i2 = np.argmin(np.abs(5. - xaxis))
+i2 = np.argmin(np.abs(3. - xaxis))
+i1 = np.argmin(np.abs(5. - xaxis))
 x1 = xaxis[i1]
 x2 = xaxis[i2]
 
@@ -64,7 +64,7 @@ print(g_spec)
 # Use canned routine to calculate normal derivative of periodic greens function
 rs = np.array([xaxis, z])
 ns = np.array([H * K * np.sin(K * xaxis) / 2, np.ones_like(xaxis)])
-G_mat = G_spec_naive(kc * L, a0 * L, rs / L, 500, n_L=ns / L)
+G_mat = G_spec_naive(kc * L, a0 * L, rs / L, 2000, n_L=ns / L)
 print(G_mat[i2, i1])
 
 rs_L = rs / L
@@ -94,10 +94,10 @@ adz = np.abs(dz)
 
 G0th = np.exp(-gamma_0L * adz + 1j * alpha_0L * dx) / gamma_0L
 u_m = evaluate("""(exp(-(2 * pi * abs(ms) + sign_ms * alpha_0L) * adz + 1j * alpha_mL * dx)
-                    / (2 * pi * abs(ms)))""").sum()
+                    / (2 * pi * abs(ms)))""")
 
-G_n = evaluate("exp(-gamma_mL * adz + 1j * alpha_mL * dx) / gamma_mL").sum()
-G_rem = G_n - u_m
+G_n = evaluate("exp(-gamma_mL * adz + 1j * alpha_mL * dx) / gamma_mL")
+G_rem = (G_n - u_m).sum()
 
 argZ = evaluate("exp(-2 * pi * (adz + 1j * dx))") + np.spacing(1)
 argZc = np.conj(argZ)
@@ -107,20 +107,17 @@ S = (S1 + S2) * np.exp(1j * alpha_0L * dx)
 
 G = (G0th - S + G_rem) / 2
 
-s1_g = np.array([np.full_like(argZc, -1j), np.sign(dz)]) \
-     * argZc * np.exp(-alpha_0L * adz) / (1 - argZc)
-s1_g[1] -= np.sign(dz) * alpha_0L * S1
-
-s2_g = np.array([np.full_like(argZ, 1j), np.sign(dz)]) \
-     * argZ * np.exp(alpha_0L * adz) / (1 - argZ)
-s2_g[1] += np.sign(dz) * alpha_0L * S2
-
 s_phase = evaluate("exp(1j * alpha_0L * dx)")
 
-s1_g[0] = 1j * alpha_0L * s_phase * S1 + s_phase * s1_g[0]
-s2_g[0] = 1j * alpha_0L * s_phase * S2 + s_phase * s2_g[0]
-s1_g[1] *= s_phase
-s2_g[1] *= s_phase
+s1_g = np.array([np.full_like(argZc, -1j), np.ones_like(adz)]) \
+     * argZc * np.exp(-alpha_0L * adz) / (1 - argZc)
+s1_g += alpha_0L * np.array([np.full_like(argZc, 1j), -np.ones_like(adz)]) * S1
+
+s2_g = np.array([np.full_like(argZ, 1j), np.ones_like(adz)]) \
+     * argZ * np.exp(alpha_0L * adz) / (1 - argZ)
+s2_g += alpha_0L * np.array([np.full_like(argZ, 1j), np.ones_like(adz)]) * S2
+S_g = (s1_g + s2_g) * s_phase
+S_g[1] *= np.sign(dz)
 
 delta = 0.000001
 dx = dx
@@ -136,4 +133,21 @@ S_d = (S1_d + S2_d) * np.exp(1j * alpha_0L * dx)
 #diff = (S1_d - S1) / delta
 diff = (S_d - S) / delta
 
-print(
+
+g_spec_grad = np.array([1j * a_q, -g_q * np.sign(dz)]) * np.exp(-g_q * np.abs(dz) + 1j * a_q * (x1 - x2)) / g_q
+
+G0th_g = np.array([1j * alpha_0L, -gamma_0L * np.sign(dz)]) * G0th
+G_n_g = np.array([1j * alpha_mL, -gamma_mL * np.sign(dz)])
+G_n_g *= G_n
+#u_m_g = np.array([1j * np.full_like(ms, alpha_0L),
+u_m_g = np.array([1j * alpha_mL,
+                  -(2 * pi * abs(ms) + sign_ms * alpha_0L) * np.sign(dz)])
+u_m_g *= u_m
+
+G_rem_g = (G_n_g - u_m_g).sum(axis=-1)
+
+dn = (n_vec / L)  @ (G0th_g - S_g + G_rem_g) / 2
+print(dn)
+
+G_mat = G_spec(kc * L, a0 * L, rs / L, 2000, n_L=ns / L)
+print(G_mat[i2, i1])

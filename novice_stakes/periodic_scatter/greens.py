@@ -92,29 +92,30 @@ def G_spec(kcL, alpha_0L, rs_L, num_eva, n_L=None):
     S2 = evaluate("exp(alpha_0L * adz) * log(1 - argZ) / (2 * pi)")
 
     if n_L is not None:
-        g_vec = np.array([np.full_like(dz, 1j * alpha_0L), -np.sign(dz) * gamma_0L])
+        g_vec = np.array([np.full(dz.shape, 1j * alpha_0L), -np.sign(dz) * gamma_0L])
         G0th = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, G0th)
+
         g_vec = np.array([np.full(dz.shape, 1j) * alpha_mL, -np.sign(dz) * gamma_mL])
         G_n = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, G_n)
-        g_vec[1] = -(2 * pi * np.abs(ms) + np.sign(ms) * alpha_0L)
+
+        g_vec[1] = -np.sign(dz) * (2 * pi * np.abs(ms) + np.sign(ms) * alpha_0L)
         u_m = np.einsum('ik,ijkl,jkl->jk', n_L, g_vec, u_m)
 
-        # Compute normal derivative
-        dz = dz[:, :, 0]
-        s1_g = np.array([np.full_like(argZc, -1j), np.sign(dz)]) \
+        G_rem = G_n - u_m
+
+        # Compute normal derivative of S term
+        s1_g = np.array([np.full_like(argZc, -1j), np.ones_like(adz)]) \
             * argZc * np.exp(-alpha_0L * adz) / (1 - argZc)
-        s1_g[1] -= np.sign(dz) * alpha_0L * S1
+        s1_g += alpha_0L * np.array([np.full_like(argZc, 1j), -np.ones_like(adz)]) * S1
 
-        s2_g = np.array([np.full_like(argZ, 1j), np.sign(dz)]) \
+        s2_g = np.array([np.full_like(argZ, 1j), np.ones_like(adz)]) \
             * argZ * np.exp(alpha_0L * adz) / (1 - argZ)
-        s2_g[1] += np.sign(dz) * alpha_0L * S2
+        s2_g += alpha_0L * np.array([np.full_like(argZ, 1j), np.ones_like(adz)]) * S2
 
-        s_phase = evaluate("exp(1j * alpha_0L * dx)")
+        S_g = (s1_g + s2_g) * evaluate("exp(1j * alpha_0L * dx)")
+        S_g[1] *= np.sign(dz[:, :, 0])
 
-        s1_g[0] = 1j * alpha_0L * s_phase * S1 + s_phase * s1_g[0]
-        s2_g[0] = 1j * alpha_0L * s_phase * S2 + s_phase * s2_g[0]
-
-        S = np.einsum('ik,ijk->jk', n_L, s1_g + s2_g)
+        S = np.einsum('ik,ijk->jk', n_L, S_g)
 
     else:
 
@@ -127,9 +128,10 @@ def G_spec(kcL, alpha_0L, rs_L, num_eva, n_L=None):
             #+ evaluate("2 * alpha_0L + kcL ** 2 * adz") \
             #* v_poly(2, argZ) / (8 * pi ** 2))
 
+        G0th = G0th[:, :, 0]
         S = (S1 + S2) * evaluate("exp(1j * alpha_0L * dx)")
+        G_rem = (G_n - u_m).sum(axis=-1)
 
-    G_rem = (G_n - u_m).sum(axis=-1)
     G = (G0th - S + G_rem) / 2
     G[np.diag_indices_from(G)] = 0. + 0.j
     return G

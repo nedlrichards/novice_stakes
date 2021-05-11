@@ -102,8 +102,8 @@ class QuadRs:
         scaled by amplitude of surface normal vector.
         """
         L = self.L
-        Kper = self.Kper
-        a0, _, b0, bn = self.bragg.bragg_angles(theta_inc, qs, facous)
+        Kper = 2 * pi / L
+        a0, an, b0, bn = self.bragg.bragg_angles(theta_inc, qs, facous)
         kacous = self.bragg.kacous(facous)
 
         # compute incident pressure field
@@ -129,47 +129,38 @@ class QuadRs:
         gdiag = (gd + gip_cont) * self.DX + gip_sing
 
         # limit the size of each matrix
-        nq = 10
-
-        #limit qs to a multiple of nq
-        qrem = (qs.size - 1) % nq
-
-        qi = np.zeros(qs.shape, dtype=np.bool)
-        if qrem == 0:
-            qi[:] = 1
-        else:
-            qi[qrem // 2: -qrem // 2] = 1
-        qs = qs[qi]
-        bn = bn[qi]
-        ier = np.split(np.arange(qs.size - 1), nq, axis=-1)
+        nq = (qs.size - 1) // 10
+        ier = np.array_split(np.arange(qs.size - 1), nq, axis=-1)
 
         # compute naive series term
         xs = dx[:, :, None]
         zs = dz[:, :, None]
+
         # treat q zero term as a special case
         kzns = bn[None, None, qs != 0]
+        kxns = an[None, None, qs != 0]
         qnes = qs[None, None, qs != 0]
 
         # use qx / abs(qx) as a sign function
-        nes = """1j * exp(1j * (bx * zs + qx * Kper * xs)) / (2 * L * bx) \
-                 - exp(-qx * a0 * zs / abs(qx)) \
-                 * exp(qx * Kper * (1j * xs - qx * zs / abs(qx))) \
-                 / (4 * pi * abs(qx))"""
-
-        # chunk calculation to be gentle on memory
-        num_chunks = int(np.ceil(qs.size / nq))
+        #nes = """1j * exp(1j * (bx * zs + qx * Kper * xs)) / (2 * L * bx) \
+                 #- exp(-qx * a0 * zs / abs(qx)) \
+                 #* exp(qx * Kper * (1j * xs - qx * zs / abs(qx))) \
+                 #/ (4 * pi * abs(qx))"""
+        nes = """1j * exp(1j * (bx * zs + qx * Kper * xs)) / (2 * L * bx)"""
 
         # start Gf with zero-th term
         Gf = 1j * np.exp(1j * b0 * dz) / (2 * L * b0)
 
         # Add non zero terms
         for ix in ier:
+            ax = kxns[:, :, ix]
             bx = kzns[:, :, ix]
             qx = qnes[:, :, ix]
             temp = ne.evaluate(nes)
             temp = np.sum(temp, axis=-1)
             Gf += temp
 
+        return Gf
         # compute positive asymptotic sum result
         Gp_total = np.exp(-a0 * dz) * np.log(1 - np.exp(Kper * (1j * dx - dz)))
         Gp_total /= -4 * pi
@@ -178,13 +169,17 @@ class QuadRs:
 
         # sum results together to approximate final matrix
         Gf += Gp_total + Gn_total
+        return Gf
         Gf *= self.DX
 
         # solve for psi_total
         Gf[np.diag_indices_from(Gf)] = gdiag
         psi_1st = solve(Gf, -p_inc)
 
-        return psi_1st
+        # integrate surface integral for reflection coefficents
+        rs = self._r_from_dpdn(psi_1st, theta_inc, qs, facous)
+
+        return rs
 
     def _r_from_dpdn(self, dpdn, theta_inc, qvec, facous):
         """

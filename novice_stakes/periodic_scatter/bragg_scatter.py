@@ -64,7 +64,7 @@ class Bragg:
         p_sca = rs @ np.exp(-1j * phase)
         return p_sca
 
-    def r_energy(self, rs, theta_inc, qs, facous):
+    def r_energy(self, theta_inc, qs, facous, rs):
         """Calculate the energy conservation relative to 1"""
         kacous = self.kacous(facous)
         _, aq, b0, bq = self.bragg_angles(theta_inc, qs, facous)

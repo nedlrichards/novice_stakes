@@ -31,14 +31,15 @@ class GreensScatter:
                        - self.zp_wave * self.xaxis) / self.d_es
         self.grad_h = np.sqrt(1 + zp_wave ** 2)
 
-        # put off surface to surface interactions untill needed
-        self.d_ae = None
-        self.cos_ae = None
-
-    def surface_field_hka(self, facous, isfar=True):
-        """Expression for the unshadowed HKA"""
-        hka_psi = self.hka_psi(facous, isfar=isfar)
-        return hka_psi
+        # surface to surface interactions
+        self.d_ae = np.sqrt((xaxis[:, None] - xaxis) ** 2
+                            + (zwave[:, None] - zwave) ** 2)
+        # cosine calculations are undefined along diagonal
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.cos_ae = (zwave[:, None] - zwave
+                        - zp_wave[:, None] * (xaxis[:, None] - xaxis))\
+                        / self.d_ae
 
     def surface_field_diem1(self, facous, isfar=True, z_ff=10):
         """Compute pressure field at the surface using diem method"""
@@ -76,31 +77,6 @@ class GreensScatter:
             p_inc = 1j / 4 * hankel1(0, 2 * pi * facous * self.d_es / self.c)
         return p_inc
 
-    def eigs_at_rcr(self, facous, xrcr, zrcr):
-        """compute delay and amplitude of eigen-rays to receiver"""
-        k_acu = 2 * pi * facous / self.c
-        d_ra = np.sqrt((xrcr - self.xaxis) ** 2 + (zrcr - self.zwave) ** 2)
-        d = (self.d_es + d_ra)
-        # analytic differentiation from mathematica
-        d_pp = -((xrcr - self.xaxis) + (zrcr - self.zwave) * self.zp_wave) ** 2 \
-               / ((zrcr - self.zwave) ** 2 + (xrcr - self.xaxis) ** 2) ** (3 / 2) \
-               -(self.xaxis + (self.zwave - self.zsrc) * self.zp_wave) ** 2 \
-               / ((self.zwave - self.zsrc) ** 2 + self.xaxis ** 2) ** (3 / 2) \
-               + (1 + self.zp_wave ** 2 - (zrcr - self.zwave) * self.zpp_wave) \
-               / np.sqrt((zrcr - self.zwave) ** 2 + (xrcr - self.xaxis) ** 2) \
-               + (1 + self.zp_wave ** 2 + (self.zwave - self.zsrc) * self.zpp_wave) \
-               / np.sqrt((self.zwave - self.zsrc) ** 2 + self.xaxis ** 2)
-
-        # find local min and max on tau
-        mins = argrelextrema(d, np.greater)[0]
-        maxs = argrelextrema(d, np.less)[0]
-        all_eigs = np.hstack([mins, maxs])
-
-        amp = -self.cos_es / (4 * pi * np.sqrt(d_ra * self.d_es))
-        sta_res = amp * np.sqrt(2 * pi / (k_acu * np.abs(d_pp))) \
-                * np.exp(1j * (k_acu * d + np.sign(d_pp) * pi / 4))
-        return self.xaxis[all_eigs], sta_res[all_eigs]
-
     def hka_psi(self, facous, isfar=True):
         """2 times the incident value of psi at surface"""
         if isfar:
@@ -111,24 +87,14 @@ class GreensScatter:
                 * hankel1(1, 2 * pi * facous * self.d_es / self.c) / self.c
         return hka_psi
 
-    def grcr(self, xrcr, zrcr, facous):
-        """compute vector to source and receiver from surface"""
-        # surface to receiver geometry
-        d_ra = np.sqrt((xrcr - self.xaxis) ** 2 + (zrcr - self.zwave) ** 2)
-        grcr = np.sqrt(self.c / (facous * d_ra)) / (4 * pi) \
-                * np.exp(1j * (2 * pi * facous * d_ra / self.c + pi / 4))
-        return grcr
-
     def first_mask(self, xrcr, zrcr, tau_max):
         """First iterate travel time mask"""
-        self._compute_selfinteraction()
         d_ra = np.sqrt((xrcr - self.xaxis) ** 2 + (zrcr - self.zwave) ** 2)
         d_1st = d_ra[:, None] + self.d_ae + self.d_es[None, :]
         return d_1st / self.c < tau_max
 
     def G1(self, facous, z_ff=10):
         """compute G matrix used in HIE, 1st kind"""
-        self._compute_selfinteraction()
         G = np.zeros((self.xaxis.size, self.xaxis.size), dtype=np.complex_)
         kc = 2 * pi * facous / self.c
         nfi = 2 * pi * facous * self.d_ae / np.real(self.c)  < z_ff
@@ -145,8 +111,6 @@ class GreensScatter:
 
     def G2(self, facous, z_ff=10, mask=None, is_L=False):
         """compute G matrix used in HIE, 2nd kind"""
-        self._compute_selfinteraction()
-
         G = np.zeros((self.xaxis.size, self.xaxis.size), dtype=np.complex_)
         nfi = 2 * pi * facous * self.d_ae / np.real(self.c) < z_ff
         ffi = np.bitwise_not(nfi)
@@ -174,64 +138,3 @@ class GreensScatter:
         G[np.diag_indices_from(G)] = -self.zpp_wave \
                                    / (4 * pi * self.grad_h ** 2)
         return G
-
-    def shadow_test(self, xrcr, zrcr, issrc=True):
-        """compute geometric shadow zones on surface
-        """
-        if issrc:
-            local_x = self.xaxis
-            la = np.arctan2(local_x, self.zwave - self.zsrc)
-        else:
-            local_x = (xrcr - self.xaxis)[: : -1]
-            la = np.arctan2(local_x, (self.zwave - zrcr)[: : -1])
-
-        # only consider forward launch angles
-        starti = local_x > 0
-        if np.any(starti):
-            starti = np.argmax(starti)
-        else:
-            starti = 0
-
-        la = la[starti: ]
-        # shadow zones start when difference goes to zero
-        la_diff = np.diff(la)
-        sstart = np.sign(la_diff)
-        ssi = np.where(sstart == -1)[0]
-        szone = []
-        istart = 0
-        while istart < ssi.size:
-            shadow_la = la[ssi[istart]]
-            exceedence = la[ssi[istart]: ] > shadow_la
-            if not np.any(exceedence):
-                szone.append([ssi[istart] + starti, self.xaxis.size - 1])
-                break
-            endi = np.argmax(exceedence)
-            szone.append([ssi[istart] + starti, ssi[istart] + endi + starti])
-
-            # move to next shadow zone
-            istart = np.where(ssi > ssi[istart] + endi)[0]
-            if istart.size == 0:
-                break
-            istart = istart[0]
-        # flip shadow points if necassary for receiver local coordinates
-        if not issrc:
-            nx = local_x.size - 1
-            szone = [[nx - sz[1], nx - sz[0]] for sz in szone]
-        return szone
-
-    def _compute_selfinteraction(self):
-        """Only compute self interaction matricies for HIE calculations"""
-        xaxis = self.xaxis
-        zwave = self.zwave
-        zp_wave = self.zp_wave
-
-        if self.d_ae is None:
-            # surface to surface interactions
-            self.d_ae = np.sqrt((xaxis[:, None] - xaxis) ** 2
-                    + (zwave[:, None] - zwave) ** 2)
-            # cosine calculations are undefined along diagonal
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                self.cos_ae = (zwave[:, None] - zwave
-                            - zp_wave[:, None] * (xaxis[:, None] - xaxis))\
-                            / self.d_ae

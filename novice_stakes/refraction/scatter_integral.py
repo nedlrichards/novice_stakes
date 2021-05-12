@@ -5,7 +5,7 @@ from .rays_to_eta import greens_FS_fan
 from novice_stakes import p_sca
 
 def p_sca_KA_fan(src_fan, rcr_fan, xaxis, x_rcr, eta, eta_p,
-                tau_img, tau_lim, faxis, sig_FT,
+                tau_img, tau_lim, faxis, sig_FT, tau_start=-0.5,
                 yaxis=None, kc=None, dz_iso=0, shadow=False):
     """Compute scatter pressure with the KA, using ray fans"""
 
@@ -58,7 +58,7 @@ def p_sca_KA_fan(src_fan, rcr_fan, xaxis, x_rcr, eta, eta_p,
 
     # surface integral for pressure at receiver
     p_rcr, taxis = p_sca(2 * dpdn_g_as, g_ra, dx, sig_FT, faxis,
-                         tt_as + tt_ra, tau_img, tau_lim,
+                         tt_as + tt_ra, tau_img + tau_start * 1e-3, tau_lim,
                          spreading=spreading)
 
     # pressure refence based on source type

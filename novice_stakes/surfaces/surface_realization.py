@@ -56,8 +56,9 @@ class Surface:
         # trivial sinusoid case
         if self.spectrum.size == 1:
             mag = self.spectrum * np.sqrt(2)
-            phase = np.exp(1j * pi * self.rng.uniform(0, 2 * pi, 1))
-            return mag * phase
+            #phase = np.exp(1j * pi * self.rng.uniform(0, 2 * pi, 1))
+            #return mag * phase
+            return mag
 
         samps = self.rng.normal(size=2 * self.spectrum.size,
                                 scale=1 / np.sqrt(2))
@@ -87,7 +88,7 @@ class Surface:
             kmax = self.kmax
             if derivative:
                 phase += " * -1j * kmax "
-            surface = np.real(phase
+            surface = np.real(ne.evaluate(phase)
                               * realization
                               * np.exp(-1j * self.kmax * self.xaxis))
             return surface

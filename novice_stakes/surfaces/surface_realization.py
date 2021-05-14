@@ -18,14 +18,12 @@ class Surface:
         self.km = 370  # wavenumber at GC wave phase speed minimum
 
 
-        if self.spectrum.size == 1:
-            if self.xaxis is None:
-                raise(ValueError('scalar spectrum requires an x-axis'))
+        if xaxis is not None:
             self.yaxis = None
-            self.N = 1
-            self.kx = None
+            self.N = spectrum.size
+            self.kx = kmax / (np.arange(spectrum.size) + 1)
             self.ky = None
-            self.omega = self.ldis_deepwater(self.kmax)
+            self.omega = self.ldis_deepwater(self.kx)
             self.h_rms = np.sum(self.spectrum)
 
         elif self.spectrum.size == self.spectrum.shape[0]:

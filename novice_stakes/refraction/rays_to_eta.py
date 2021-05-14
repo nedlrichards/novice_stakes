@@ -20,20 +20,20 @@ def greens_FS_fan(ray_fan, rho, eta, faxis,
         xi = (np.newaxis, slice(rho.size))
         oi = (slice(faxis.size), np.newaxis)
 
+    # line source
     if not isline:
         if phi is None:
             tt, amp, d2d = extrapolate_fan(ray_fan, rho, eta, dz_iso,
-                                        return_d2d=True, eta_p=eta_p)
+                                           return_d2d=True, eta_p=eta_p)
         else:
             tt, amp = extrapolate_fan(ray_fan, rho, eta, dz_iso,
                                       phi=phi, eta_p=eta_p)
             d2d = None
-
+    # point source
     else:
         kaxis = 2 * pi * faxis / c_surf
         tt, amp = extrapolate_fan(ray_fan, rho, eta, dz_iso,
-                                  kaxis=kaxis, return_d2d=False,
-                                  eta_p=eta_p, phi=phi)
+                                  kaxis=kaxis, eta_p=eta_p, phi=phi)
         d2d = None
 
     # shadow correction possible for 1-D surfaces

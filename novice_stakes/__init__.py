@@ -11,3 +11,4 @@ Basic specification of scatter enviornments
 from . import core
 from .core import *
 from . import surfaces
+from . import periodic

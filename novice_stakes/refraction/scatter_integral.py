@@ -48,7 +48,8 @@ def p_sca_KA_fan(src_fan, rcr_fan, xaxis, x_rcr, eta, eta_p,
 
     g_ra, tt_ra, d2d_rcr = greens_FS_fan(rcr_fan, rho_rcr, eta, faxis,
                                          phi=phi_rcr, isline=isline,
-                                         eta_p=None, dz_iso=dz_iso, shadow=shadow)
+                                         eta_p=None, dz_iso=dz_iso,
+                                         shadow=shadow)
 
     if d2d_src is not None:
         # compute total second derivative of delay for stationary phase
@@ -58,8 +59,8 @@ def p_sca_KA_fan(src_fan, rcr_fan, xaxis, x_rcr, eta, eta_p,
 
     # surface integral for pressure at receiver
     p_rcr, taxis = p_sca(2 * dpdn_g_as, g_ra, dx, sig_FT, faxis,
-                         tt_as + tt_ra, tau_img + tau_start * 1e-3, tau_lim,
-                         spreading=spreading)
+                         tt_as + tt_ra, tau_img + tau_start * 1e-3,
+                         tau_lim, spreading=spreading)
 
     # pressure refence based on source type
     if isline:

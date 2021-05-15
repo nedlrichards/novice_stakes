@@ -42,7 +42,6 @@ def p_sca(dpdn_g_as, g_ra, dx, sig_FT, faxis, tau_total, tau_reference,
         # TODO: clairify why the negative sign is necassary to match image
         # solution, see mathematica nb example
         igrand_scale = -dx
-        kc = spreading[0]
     else:
         raise(ValueError('Spreading specification can be either point or line'))
 

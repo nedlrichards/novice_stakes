@@ -48,14 +48,14 @@ def p_sca_KA_iso_pw(z_src, z_rcr, x_rcr, xaxis, eta, eta_p, tau_lim, faxis, fc,
     tt_as = (xaxis - x_img) * px + eta * pz + tau_img_src
     n = np.array([-eta_p, np.ones_like(eta_p)])
     grad_g_as = 2j * pi * faxis[None, None, :] * np.array([px, pz])[:, None, None] \
-            * np.exp(2j * pi * faxis[None, None, :] * tt_as[None, :, None])
+              * np.exp(2j * pi * faxis[None, None, :] * tt_as[None, :, None])
     dpdn_g_as = np.einsum('ij,ijk->jk', n, grad_g_as)
 
 
     rho_rcr = np.sqrt((x_rcr - xaxis) ** 2 + (z_rcr - eta) ** 2)
     tt_ra = rho_rcr / c0
-    g_ra = 1j * np.sqrt(c0 / faxis) \
-         * np.exp(1j * (2 * pi * faxis * rho_rcr[:, None] / c0 + pi / 4)) / (4 * pi)
+    g_ra = 1j * np.sqrt(c0 / (rho_rcr[:, None] * faxis)) \
+         * np.exp(1j * (2 * pi * faxis * tt_ra[:, None] - pi / 4)) / (4 * pi)
 
     # surface integral for pressure at receiver
     p_rcr, taxis = p_sca(2 * np.conj(dpdn_g_as).T, np.conj(g_ra).T,
@@ -63,7 +63,4 @@ def p_sca_KA_iso_pw(z_src, z_rcr, x_rcr, xaxis, eta, eta_p, tau_lim, faxis, fc,
                          tt_as + tt_ra, tau_img + tau_start * 1e-3,
                          tau_lim)
 
-    # pressure refence based on line source
-    p_ref = np.sqrt(1 / (fc * tau_img_rcr)) / (4 * pi)
-
-    return p_rcr, taxis, p_ref
+    return p_rcr, taxis

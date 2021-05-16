@@ -26,8 +26,7 @@ def initialize_axis_pw(z_src, z_rcr, x_rcr, dx, tau_lim, c0=1500.):
     ff = 5
     numx = np.ceil((x2 - x1 + ff) / dx)
     xaxis = np.arange(numx) * dx - ff / 2 + x1
-    return xaxis, x_img, tau_min
-
+    return xaxis
 
 def p_sca_KA_iso_pw(z_src, z_rcr, x_rcr, xaxis, eta, eta_p, tau_lim, faxis, fc,
                     sig_FT, c0=1500., tau_start=-0.5, shadow=False):

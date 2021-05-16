@@ -186,11 +186,19 @@ class QuadRs:
         reflection coefficents calculated from p normal derivative at surface
         """
         _, _, _, bn = self.bragg.bragg_angles(theta_inc, qvec, facous)
+        bn_ = bn[:, None]
+        q_ = qvec[:, None]
+        z_ = self.zwave[None, :]
+        x_ = self.xaxis[None, :]
+        K = self.bragg.Kper
         # greens function at surface
-        phase = (bn[:, None] * self.zwave[None, :]
-                - qvec[:, None] * self.bragg.Kper * self.xaxis[None, :])
-        gra = (1j / (2 * self.L)) * np.exp(-1j * phase) / bn[:, None]
+        #phase = (bn[:, None] * self.zwave[None, :]
+                #- qvec[:, None] * self.bragg.Kper * self.xaxis[None, :])
+        #gra = (1j / (2 * self.L)) * np.exp(-1j * phase) / bn[:, None]
+        #rs = -np.sum(dpdn * gra, axis=1) * self.DX
 
+        igrnd = (1j / (2 * self.L)) \
+              * ne.evaluate("exp(-1j * (bn_ * z_ - q_ * K * x_)) * dpdn / bn_")
         # integrate surface integral for reflection coefficents
-        rs = -np.sum(dpdn * gra, axis=1) * self.DX
+        rs = -igrnd.sum(axis=1) * self.DX
         return rs
